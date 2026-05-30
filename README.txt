@@ -36,7 +36,7 @@ npm install("only for the first time or the first run")
 npm run dev or npm run dev -- --force
 
 
-5.📚 Adding New Curriculum (RAG System)
+5.📚 Adding New Curriculum (RAG System)[ONLY NEEDED WHEN ADDING NEW - no need to run on every startup or when data is already there in the chromadb]
 
 If you download new textbooks from OpenStax to expand the tutor's knowledge base:
 

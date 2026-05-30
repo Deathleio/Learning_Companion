@@ -24,7 +24,7 @@ def analyze_performance_node(state: AgentState):
     return {"requires_remedial_routing": is_frustrated, "active_agent_node": "Performance Analyzer Node"}
 
 def socratic_hint_node(state: AgentState):
-    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
+    model = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0.2)
     context_str = "\n".join(state["retrieved_curriculum"])
     
     system_prompt = (
@@ -39,7 +39,7 @@ def socratic_hint_node(state: AgentState):
     return {"messages": [AIMessage(content=response.content)], "active_agent_node": "Socratic Hint Agent Node"}
 
 def direct_explanation_node(state: AgentState):
-    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1)
+    model = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0.1)
     context_str = "\n".join(state["retrieved_curriculum"])
     
     system_prompt = (
