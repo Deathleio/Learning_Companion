@@ -1,0 +1,27 @@
+# Local secret configuration environment keys
+backend/.env
+.env
+
+# Python compilation caches and environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+ENV/
+env/
+
+# On-disk local database storage engines (ChromaDB)
+backend/chroma_knowledge_base/
+chroma_knowledge_base/
+
+# Node runtime files (Frontend dependencies)
+frontend/node_modules/
+frontend/dist/
+
+# Large dataset text or archive folders
+backend/data/ednet/KT1.zip
+backend/data/ednet/ednet_small_sample.csv
+
+# System file logs
+*.log
+.DS_Store
