@@ -58,4 +58,5 @@ async def run_session_cycle(payload: ChatSessionPayload):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    # Kept reload=False to ensure stable single-process execution on Windows Python 3.13
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Terminal, Activity, BookOpen, AlertTriangle, ArrowRight, BrainCircuit, Database, Network } from 'lucide-react';
+import { Terminal, Activity, BookOpen, ArrowRight, BrainCircuit, Database, Network } from 'lucide-react';
 
 // Multi-Subject Quiz Bank
 const QUIZ_BANK = {
@@ -78,7 +78,7 @@ export default function App() {
       setTelemetry({
         activeNode: result.active_node,
         remedialPathActive: result.remedial_triggered,
-        retrievedContext: result.context_pulled || []
+        retrievedContext: result.context_pulled || [] // Safe array fallback logic prevents black screen crashes
       });
 
     } catch (error) {
@@ -225,7 +225,7 @@ export default function App() {
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl flex-1 flex flex-col">
             <h2 className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-3 flex items-center gap-2"><BookOpen className="w-4 h-4"/> textbook Vectors Pulled</h2>
             <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-[11px] text-purple-300 flex-1 overflow-y-auto custom-scrollbar space-y-2">
-              {telemetry.retrievedContext.length === 0 ? (
+              {(telemetry.retrievedContext || []).length === 0 ? (
                 <span className="text-slate-600 italic">Awaiting query to run semantic search...</span>
               ) : (
                 telemetry.retrievedContext.map((text, idx) => (

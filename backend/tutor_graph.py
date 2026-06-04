@@ -20,11 +20,22 @@ def retrieve_context_node(state: AgentState):
     return {"retrieved_curriculum": context, "active_agent_node": "Context Retriever Node"}
 
 def analyze_performance_node(state: AgentState):
-    is_frustrated = state["time_taken_seconds"] > 90 or state["consecutive_errors"] >= 2
+    latest_msg = state["messages"][-1].content.lower()
+    
+    # Frustration trigger check 1: Manual sliders from frontend metrics
+    metrics_frustrated = state["time_taken_seconds"] > 90 or state["consecutive_errors"] >= 2
+    
+    # Frustration trigger check 2: Text matching for explicit surrender keywords
+    surrender_keywords = ["give me the answer", "give me answers", "i don't know", "tell me the answer", "stuck"]
+    text_frustrated = any(keyword in latest_msg for keyword in surrender_keywords)
+    
+    # Route to remedial path if either condition is met
+    is_frustrated = metrics_frustrated or text_frustrated
+    
     return {"requires_remedial_routing": is_frustrated, "active_agent_node": "Performance Analyzer Node"}
 
 def socratic_hint_node(state: AgentState):
-    model = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0.2)
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
     context_str = "\n".join(state["retrieved_curriculum"])
     
     system_prompt = (
@@ -39,13 +50,15 @@ def socratic_hint_node(state: AgentState):
     return {"messages": [AIMessage(content=response.content)], "active_agent_node": "Socratic Hint Agent Node"}
 
 def direct_explanation_node(state: AgentState):
-    model = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0.1)
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1)
     context_str = "\n".join(state["retrieved_curriculum"])
     
     system_prompt = (
-        "The learner is over-frustrated. Socratic boundaries are temporarily lowered.\n"
+        "The learner is over-frustrated and has failed multiple times. Socratic boundaries are now completely lowered.\n"
         f"Verified Curriculum Context:\n{context_str}\n\n"
-        "Provide a direct, clear step-by-step breakdown of the concept to alleviate their frustration."
+        "CRITICAL INSTRUCTION: You must explicitly state the final answer, values, formulas, and conclusions clearly. "
+        "Provide a direct, transparent, step-by-step breakdown of how the problem is calculated, "
+        "reveal the definitive solution immediately, and explain why it is correct to alleviate their frustration."
     )
     
     payload = [HumanMessage(content=system_prompt)] + state["messages"]
@@ -57,6 +70,7 @@ def route_after_analysis(state: AgentState) -> Literal["socratic_hint", "direct_
         return "direct_explanation"
     return "socratic_hint"
 
+# Assembly of the Stateful Architecture Network
 workflow = StateGraph(AgentState)
 workflow.add_node("retrieve_context", retrieve_context_node)
 workflow.add_node("analyze_performance", analyze_performance_node)
