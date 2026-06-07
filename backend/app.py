@@ -10,7 +10,7 @@ load_dotenv()
 
 from tutor_graph import compiled_tutor_app
 
-app = FastAPI(title="Agentic Feedback Engine Server")
+app = FastAPI(title="Agentic Multi-Tier Educational Server")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,19 +24,29 @@ class ChatSessionPayload(BaseModel):
     message: str
     time_taken: int
     consecutive_errors: int
+    current_tier: str
+    current_subject: str
+    current_mode: str  # "theory" or "quiz"
     history: list[dict] = []
 
 @app.post("/api/tutor/chat")
 async def run_session_cycle(payload: ChatSessionPayload):
     messages_history = []
     
+    # Reconstruct conversational history for the graph context
     for chat in payload.history:
         if chat.get("sender") in ["user", "student"]:
             messages_history.append(HumanMessage(content=chat["text"]))
         else:
             messages_history.append(AIMessage(content=chat["text"]))
             
-    messages_history.append(HumanMessage(content=payload.message))
+    # Append structured current turn message with clear system parameters
+    structured_prompt = (
+        f"[Academic Tier: {payload.current_tier}] "
+        f"[Subject Area: {payload.current_subject}] "
+        f"[Interface Mode: {payload.current_mode}] -> {payload.message}"
+    )
+    messages_history.append(HumanMessage(content=structured_prompt))
     
     initial_graph_state = {
         "messages": messages_history,
@@ -47,6 +57,7 @@ async def run_session_cycle(payload: ChatSessionPayload):
         "active_agent_node": "Initialization"
     }
     
+    # Process through the LangGraph agent state network
     final_graph_state = compiled_tutor_app.invoke(initial_graph_state)
     
     return {
@@ -58,5 +69,4 @@ async def run_session_cycle(payload: ChatSessionPayload):
 
 if __name__ == "__main__":
     import uvicorn
-    # Kept reload=False to ensure stable single-process execution on Windows Python 3.13
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)

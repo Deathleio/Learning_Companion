@@ -28,6 +28,11 @@ To run this system, you need to launch the Backend (FastAPI) and the Frontend (V
 
 python backend/app.py
 
+or 
+
+cd backend
+python app.py
+
 
 4. TO run the Frontend
 
