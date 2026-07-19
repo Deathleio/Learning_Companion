@@ -465,10 +465,22 @@ export default function App() {
       console.error(e);
       // Frontend fallback report calculation
       const avgScore = detailsList.reduce((acc, curr) => acc + curr.fuzzy_score, 0) / Math.max(1, detailsList.length);
+      const ratingTier = avgScore >= 85 ? "High Mastery" : (avgScore >= 70 ? "Moderate Mastery" : (avgScore >= 50 ? "Developing" : "Intervention Required"));
+      let fallbackHint = "";
+      if (ratingTier === "High Mastery") {
+        fallbackHint = "Exceptional results! Challenge yourself by applying these concepts to real-world multi-variable problems or exploring advanced mathematical derivations.";
+      } else if (ratingTier === "Moderate Mastery") {
+        fallbackHint = "Great job! Try to focus on pacing and reducing execution time on calculations to build stronger automatic recall.";
+      } else if (ratingTier === "Developing") {
+        fallbackHint = "Good effort! Go back to the flashcards and review the specific formulas you missed. Try to explain why each term is placed where it is.";
+      } else {
+        fallbackHint = "Review required. Work through the core textbook chapters and focus on understanding the governing formulas step-by-step before attempting the exam again.";
+      }
       setExamReport({
         calculated_score: Math.round(avgScore),
-        rating_tier: avgScore >= 85 ? "High Mastery" : (avgScore >= 60 ? "Moderate Mastery" : "Intervention Required"),
+        rating_tier: ratingTier,
         mentor_remark: "Evaluation compiled locally. Core analytical components resolved.",
+        remediation_hint: fallbackHint,
         growth_metrics: {
           pathway_taken: "Pathway A: Guided Scaffolding",
           score_delta_pct: 12.5,
@@ -940,6 +952,36 @@ export default function App() {
                               <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">Academic Mentor Remarks</span>
                               <p className="text-xs text-slate-300 leading-relaxed">{examReport.mentor_remark}</p>
                             </div>
+
+                            {examReport.remediation_hint && (
+                              <div className={`p-4 rounded-xl border text-xs space-y-2 relative overflow-hidden bg-slate-900/60 transition-all ${
+                                examReport.rating_tier === 'High Mastery'      ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]' :
+                                examReport.rating_tier === 'Moderate Mastery'  ? 'border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.05)]' :
+                                examReport.rating_tier === 'Developing'        ? 'border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.05)]' :
+                                                                                'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]'
+                              }`}>
+                                <div className="flex items-center justify-between border-b border-slate-850 pb-2 mb-1">
+                                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                    <Sparkles className={`w-3.5 h-3.5 ${
+                                      examReport.rating_tier === 'High Mastery'      ? 'text-emerald-400' :
+                                      examReport.rating_tier === 'Moderate Mastery'  ? 'text-blue-400' :
+                                      examReport.rating_tier === 'Developing'        ? 'text-yellow-400' :
+                                                                                      'text-rose-400'
+                                    }`} />
+                                    Fuzzy-Calibrated Remediation Hint
+                                  </span>
+                                  <span className="text-[8px] font-mono text-slate-500">
+                                    {examReport.rating_tier === 'High Mastery'      ? 'Level 4: Advanced Challenge' :
+                                     examReport.rating_tier === 'Moderate Mastery'  ? 'Level 3: Calibration' :
+                                     examReport.rating_tier === 'Developing'        ? 'Level 2: Socratic Study' :
+                                                                                    'Level 1: Deep Walkthrough'}
+                                  </span>
+                                </div>
+                                <div className="text-slate-300 leading-relaxed font-normal text-[11px] select-text whitespace-pre-wrap select-all font-sans">
+                                  {examReport.remediation_hint}
+                                </div>
+                              </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-850/30 text-xs">

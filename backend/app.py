@@ -258,8 +258,24 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
                 "Do NOT be generic. Every sentence must address THIS student's specific error."
             )
 
-        response      = model.invoke([HumanMessage(content=hint_prompt)])
-        hint_response = response.content
+        try:
+            response      = model.invoke([HumanMessage(content=hint_prompt)])
+            hint_response = response.content
+        except Exception as e:
+            print("GEMINI API ERROR IN EVALUATE-SHORT-ANSWER:", e)
+            if degree_of_failure >= 60.0:
+                hint_response = (
+                    f"Fuzzy System Calibration: Intervention Required. Let's walk through the concept.\n"
+                    f"Governing Formula: {payload.hint_formula or 'Determine relation from question parameters'}.\n"
+                    f"Remediation Analysis: {gap_analysis}\n"
+                    f"Focus on substituting the known values step-by-step to calculate the correct answer."
+                )
+            else:
+                hint_response = (
+                    f"Fuzzy System Calibration: Developing Trajectory. You are very close!\n"
+                    f"Socratic Nudge: Look closely at your values. Did you apply the operation correctly?\n"
+                    f"Misconception Hint: {payload.hint_misconception or 'Double check calculation order.'}"
+                )
     else:
         hint_response = (
             f"Correct! {linguistic_remark} "
@@ -298,6 +314,171 @@ async def evaluate_final_exam(payload: ExamSubmissionPayload):
         exam_score=assessment["fuzzy_score"],
         exam_latency=average_latency
     )
+
+    # ══════════════════════════════════════════════════════════════════════════════
+    # RESOLVE QUESTION DETAILS & CONSTRUCT PERFORMANCE PROFILE
+    # ══════════════════════════════════════════════════════════════════════════════
+    subject_repo = FLASHCARD_REPOSITORY.get(payload.current_subject, {})
+    tier_data = subject_repo.get(payload.current_tier, {"finalExam": []})
+    exam_questions = {q["qId"]: q for q in tier_data.get("finalExam", [])}
+
+    correct_details = []
+    incorrect_details = []
+    
+    if payload.question_details:
+        for q_detail in payload.question_details:
+            q_id = q_detail.get("qId")
+            is_corr = q_detail.get("is_correct", False)
+            attempts = q_detail.get("attempts", 1)
+            latency = q_detail.get("latency_seconds", 0)
+            q_fuzzy_score = q_detail.get("fuzzy_score", 0.0)
+            
+            repo_q = exam_questions.get(q_id, {})
+            topic = repo_q.get("moduleOrigin", "Unknown Topic")
+            q_text = repo_q.get("text", "Unknown Question")
+            formula = repo_q.get("formula", "")
+            misconception = repo_q.get("misconception", "")
+            
+            info = {
+                "qId": q_id,
+                "topic": topic,
+                "question": q_text,
+                "formula": formula,
+                "misconception": misconception,
+                "attempts": attempts,
+                "latency": latency,
+                "fuzzy_score": q_fuzzy_score
+            }
+            if is_corr:
+                correct_details.append(info)
+            else:
+                incorrect_details.append(info)
+
+    # ══════════════════════════════════════════════════════════════════════════════
+    # MAMDANI-CALIBRATED EXAM EVALUATION STUDY HINT GENERATION
+    # ══════════════════════════════════════════════════════════════════════════════
+    rating_tier = assessment["performance_tier"]
+    calculated_score = assessment["fuzzy_score"]
+    
+    correct_desc = ""
+    for idx, q in enumerate(correct_details, 1):
+        correct_desc += f"  {idx}. Topic: {q['topic']} | Question: {q['question']} (Fuzzy Score: {q['fuzzy_score']}%, Latency: {q['latency']}s, Attempts: {q['attempts']})\n"
+        
+    incorrect_desc = ""
+    for idx, q in enumerate(incorrect_details, 1):
+        incorrect_desc += f"  {idx}. Topic: {q['topic']} | Question: {q['question']}\n"
+        if q['formula']:
+            incorrect_desc += f"     - Governing Formula: {q['formula']}\n"
+        if q['misconception']:
+            incorrect_desc += f"     - Common Misconception: {q['misconception']}\n"
+        incorrect_desc += f"     - (Fuzzy Score: {q['fuzzy_score']}%, Latency: {q['latency']}s, Attempts: {q['attempts']})\n"
+
+    prompt_context = (
+        f"SUBJECT: {payload.current_subject} | LEVEL: {payload.current_tier}\n"
+        f"OVERALL PERFORMANCE METRICS (Mamdani Fuzzy Inference System):\n"
+        f"  - Fuzzy Evaluation Score: {calculated_score}%\n"
+        f"  - Performance Rating Tier: {rating_tier}\n"
+        f"  - Average Pacing Latency: {average_latency:.1f} seconds per question\n\n"
+    )
+    if correct_desc:
+        prompt_context += f"TOPICS MASTERED / CORRECT ANSWERS:\n{correct_desc}\n"
+    if incorrect_desc:
+        prompt_context += f"TOPICS REQUIRING ATTENTION / INCORRECT ANSWERS:\n{incorrect_desc}\n"
+
+    # Select level of hint based on performance tier
+    if rating_tier == "High Mastery":
+        level_instruction = (
+            "Decided Hint Level: LEVEL 4 - ADVANCED CONCEPTUAL CHALLENGE (High Mastery)\n"
+            "DIRECTIVE:\n"
+            "1. Praise the student briefly and enthusiastically for their high mastery performance.\n"
+            "2. Offer an advanced extension question or high-level conceptual challenge related to the course material "
+            "   (e.g., if it is Class 10 Physics, present a challenging physics concept or scenario to think about).\n"
+            "3. Provide brief guidance on how they would approach this advanced challenge."
+        )
+    elif rating_tier == "Moderate Mastery":
+        level_instruction = (
+            "Decided Hint Level: LEVEL 3 - EFFICIENCY & PRECISION CALIBRATION (Moderate Mastery)\n"
+            "DIRECTIVE:\n"
+            "1. Acknowledge their solid conceptual grasp (Moderate Mastery).\n"
+            "2. Focus on efficiency, speed, or precision. Suggest specific pacing tips or minor calculations tricks.\n"
+            "3. Give them one specific study hint on how to polish their execution (e.g. dimensional analysis, estimating answers, checking units) to reach the next tier."
+        )
+    elif rating_tier == "Developing":
+        level_instruction = (
+            "Decided Hint Level: LEVEL 2 - SOCRATIC STUDY HINT & GUIDANCE (Developing)\n"
+            "DIRECTIVE:\n"
+            "1. Reassure the student that they are on a developing trajectory and close to mastery.\n"
+            "2. Do NOT give direct formulas or worked-out solutions for the missed questions.\n"
+            "3. Pinpoint the conceptual gaps in the incorrect topics. Ask 1-2 Socratic questions that guide them to discover "
+            "   the correct relationships or formulas for themselves during their review.\n"
+            "4. Suggest a targeted area of study."
+        )
+    else:  # Intervention Required
+        level_instruction = (
+            "Decided Hint Level: LEVEL 1 - DEEP CONCEPT WALKTHROUGH & FORMULA REMEDIATION (Intervention Required)\n"
+            "DIRECTIVE:\n"
+            "1. Reassure the student and provide an encouraging, highly structured study path.\n"
+            "2. Identify every failed topic clearly.\n"
+            "3. State the governing formulas and explain the core concepts step-by-step for those failed topics.\n"
+            "4. Provide a structured review checklist or revision guide to help rebuild their foundation."
+        )
+
+    hint_prompt = (
+        "You are an expert academic tutor. You are analyzing a student's final exam performance details.\n"
+        "Your task is to generate a custom 'Remediation Hint & Study Plan' for this student based on the Decided Hint Level.\n\n"
+        + prompt_context +
+        level_instruction + "\n\n"
+        "FORMATTING REQUIREMENT:\n"
+        "- Respond in clean, readable, professional markdown.\n"
+        "- Keep it concise, engaging, and highly personalized. Address the student directly as 'You'.\n"
+        "- Do not use placeholders. Use actual subject names, topics, and values from the context."
+    )
+
+    remediation_hint = ""
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+    def get_fallback_hint():
+        if rating_tier == "High Mastery":
+            return (
+                f"Congratulations on your outstanding performance! You have achieved High Mastery with a score of {calculated_score}%.\n\n"
+                f"**Level 4 Advanced Challenge:** Try applying these concepts to multi-body scenarios or deriving the governing equations from first principles."
+            )
+        elif rating_tier == "Moderate Mastery":
+            return (
+                f"Great job! You achieved Moderate Mastery with a score of {calculated_score}%.\n\n"
+                f"**Level 3 Efficiency Calibration:** To refine your performance and reach the highest tier, focus on speed and pacing (average latency: {average_latency:.1f}s).\n"
+                f"*Tip: Try dimensional analysis or estimation techniques to verify your steps quickly.*"
+            )
+        elif rating_tier == "Developing":
+            topics_list = ", ".join(set(q["topic"] for q in incorrect_details)) if incorrect_details else "the missed topics"
+            return (
+                f"You are on a developing trajectory with a score of {calculated_score}%.\n\n"
+                f"**Level 2 Socratic Guidance:** Review the following topics that you struggled with: {topics_list}.\n"
+                f"*Socratic Study Tip: For each missed question, ask yourself what the physical quantities represent and how they vary in relation to each other.*"
+            )
+        else:
+            remediation_steps = ""
+            for idx, q in enumerate(incorrect_details, 1):
+                formula_part = f" (Formula: {q['formula']})" if q['formula'] else ""
+                remediation_steps += f"  - Topic: {q['topic']}{formula_part}\n"
+            remediation_steps = remediation_steps or "  - Review all module formulas.\n"
+            return (
+                f"Targeted review recommended. Let's rebuild your foundation (Overall Score: {calculated_score}%).\n\n"
+                f"**Level 1 Deep Concept Walkthrough:** Focus on these areas:\n"
+                f"{remediation_steps}\n"
+                f"*Study Advice: Write down these formulas and practice at least 3 basic calculations for each before retaking the assessment.*"
+            )
+
+    if api_key:
+        try:
+            model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, google_api_key=api_key)
+            response = model.invoke([HumanMessage(content=hint_prompt)])
+            remediation_hint = response.content.strip()
+        except Exception as e:
+            print("GEMINI API ERROR IN EVALUATE-EXAM:", e)
+            remediation_hint = get_fallback_hint()
+    else:
+        remediation_hint = get_fallback_hint()
     
     return {
         "subject": payload.current_subject,
@@ -305,6 +486,7 @@ async def evaluate_final_exam(payload: ExamSubmissionPayload):
         "calculated_score": assessment["fuzzy_score"],
         "rating_tier": assessment["performance_tier"],
         "mentor_remark": assessment["linguistic_remark"],
+        "remediation_hint": remediation_hint,
         "growth_metrics": analytics
     }
 
