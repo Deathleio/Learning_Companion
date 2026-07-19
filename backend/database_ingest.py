@@ -2,9 +2,18 @@ import os
 import chromadb
 from chromadb.utils import embedding_functions
 
+import os
+import chromadb
+from chromadb.utils import embedding_functions
+
 class DatabaseIngestPipeline:
-    def __init__(self, db_path: str = "./chroma_knowledge_base"):
+    def __init__(self, db_path: str = None):
         """Initializes the local persistent vector database storage engine on disk."""
+        if db_path is None:
+            # Resolve db_path to the root workspace folder chroma_knowledge_base
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(base_dir, "chroma_knowledge_base")
+        
         self.client = chromadb.PersistentClient(path=db_path)
         self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
         
@@ -14,10 +23,10 @@ class DatabaseIngestPipeline:
             embedding_function=self.embedding_function
         )
 
-    def ingest_openstax_text(self, file_path: str, subject: str, grade_level: str):
+    def ingest_openstax_text(self, file_path: str, subject: str, academic_tier: str):
         """Processes raw text textbooks into paragraphs and adds them to the vector index in safe batch sizes."""
         if not os.path.exists(file_path):
-            print(f"⚠️ Source file not found at {file_path}. Generating fallback mock content for initialization.")
+            print(f"[WARN] Source file not found at {file_path}. Generating fallback mock content for initialization.")
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as fallback:
                 fallback.write(
@@ -33,16 +42,17 @@ class DatabaseIngestPipeline:
         
         total_chunks = len(paragraphs)
         if total_chunks == 0:
-            print(f"❌ No valid text segments extracted from {file_path}")
+            print(f"[ERROR] No valid text segments extracted from {file_path}")
             return
 
-        print(f"\n[Processing {subject}] Loaded {total_chunks} paragraphs. Beginning batch slicing operation...")
+        print(f"\n[Processing {subject} | {academic_tier}] Loaded {total_chunks} paragraphs. Beginning batch slicing...")
 
         # Generate structural IDs and metadata arrays
-        all_ids = [f"{subject.lower()}_{i:04d}" for i in range(total_chunks)]
+        all_ids = [f"{subject.lower()}_{academic_tier.replace(' ', '_').lower()}_{i:04d}" for i in range(total_chunks)]
         all_metadatas = [{
             "subject": subject,
-            "grade_level": grade_level,
+            "academic_tier": academic_tier,
+            "grade_level": academic_tier, # fallback compatibility
             "data_integrity_status": "verified"
         } for _ in range(total_chunks)]
 
@@ -62,7 +72,7 @@ class DatabaseIngestPipeline:
             )
             print(f"   Processed segment range [{start_idx} to {min(end_idx, total_chunks)}] successfully...")
 
-        print(f"✅ Successfully vectorized and loaded all {total_chunks} paragraphs from {subject} textbook into ChromaDB.")
+        print(f"[OK] Successfully vectorized and loaded all {total_chunks} paragraphs from {subject} ({academic_tier}) into ChromaDB.")
 
     def query_verified_context(self, query: str) -> list[str]:
         """Queries the local collection using verified structural parameters only."""
@@ -77,10 +87,10 @@ class DatabaseIngestPipeline:
         """Validates that your backend Performance Analyzer can cleanly parse your shrunken EdNet sample."""
         import csv
         if not os.path.exists(csv_path):
-            print(f"⚠️ Warning: Active tracking log sample missing at {csv_path}. Please verify your shrink_dataset.py ran correctly.")
+            print(f"[WARN] Warning: Active tracking log sample missing at {csv_path}. Please verify your shrink_dataset.py ran correctly.")
             return
 
-        print(f"\n📋 Previewing EdNet telemetry interaction mapping from: {csv_path}")
+        print(f"\n[PREVIEW] Previewing EdNet telemetry interaction mapping from: {csv_path}")
         with open(csv_path, mode="r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
             for idx, row in enumerate(reader):
@@ -91,17 +101,42 @@ class DatabaseIngestPipeline:
 if __name__ == "__main__":
     pipeline = DatabaseIngestPipeline()
     
+    # Delete the old collection to start fresh
+    try:
+        pipeline.client.delete_collection("curriculum_repository")
+        print("[CLEARED] Old collection curriculum_repository removed.")
+    except Exception as e:
+        print("No old collection to delete or error:", e)
+        
+    pipeline.curriculum_collection = pipeline.client.get_or_create_collection(
+        name="curriculum_repository",
+        embedding_function=pipeline.embedding_function
+    )
+    
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    
     # Define textbook sources to load into the curriculum repository
     textbooks = [
-        {"path": "./data/curriculum/physics_textbook.txt", "subject": "Physics", "grade": "Class 11"},
-        {"path": "./data/curriculum/biology_textbook.txt", "subject": "Biology", "grade": "Class 11"},
-        {"path": "./data/curriculum/calculus_textbook.txt", "subject": "Mathematics", "grade": "Undergraduate"}
+        # Physics
+        {"path": os.path.join(backend_dir, "data", "curriculum", "physics_textbook.txt"), "subject": "Physics", "tier": "Class 10"},
+        {"path": os.path.join(backend_dir, "data", "curriculum", "physics_textbook.txt"), "subject": "Physics", "tier": "Class 11-12"},
+        {"path": os.path.join(backend_dir, "data", "curriculum", "physics_textbook.txt"), "subject": "Physics", "tier": "Undergraduate"},
+        
+        # Biology
+        {"path": os.path.join(backend_dir, "data", "curriculum", "biology_textbook.txt"), "subject": "Biology", "tier": "Class 10"},
+        {"path": os.path.join(backend_dir, "data", "curriculum", "biology_textbook.txt"), "subject": "Biology", "tier": "Class 11-12"},
+        {"path": os.path.join(backend_dir, "data", "curriculum", "biology_textbook.txt"), "subject": "Biology", "tier": "Undergraduate"},
+        
+        # Mathematics
+        {"path": os.path.join(backend_dir, "data", "curriculum", "math_textbook.txt"), "subject": "Mathematics", "tier": "Class 10"},
+        {"path": os.path.join(backend_dir, "data", "curriculum", "math_textbook.txt"), "subject": "Mathematics", "tier": "Class 11-12"},
+        {"path": os.path.join(backend_dir, "data", "curriculum", "calculus_textbook.txt"), "subject": "Mathematics", "tier": "Undergraduate"}
     ]
     
     # 1. Ingest all curriculum content paths sequentially
     for book in textbooks:
-        pipeline.ingest_openstax_text(book["path"], book["subject"], book["grade"])
+        pipeline.ingest_openstax_text(book["path"], book["subject"], book["tier"])
     
     # 2. Test reading behavioral interaction metrics sample path
-    ednet_sample_path = "./data/ednet/ednet_small_sample.csv"
+    ednet_sample_path = os.path.join(backend_dir, "data", "ednet", "ednet_small_sample.csv")
     pipeline.preview_interaction_metrics(ednet_sample_path)

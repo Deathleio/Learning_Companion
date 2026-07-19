@@ -11,12 +11,25 @@ class AgentState(TypedDict):
     requires_remedial_routing: bool
     retrieved_curriculum: list[str]
     active_agent_node: str
+    subject: str
+    academic_tier: str
 
 def retrieve_context_node(state: AgentState):
     latest_query = state["messages"][-1].content
     from database_ingest import DatabaseIngestPipeline
     pipeline = DatabaseIngestPipeline()
-    context = pipeline.query_verified_context(latest_query)
+    try:
+        results = pipeline.curriculum_collection.query(
+            query_texts=[latest_query],
+            n_results=3,
+            where={"$and": [
+                {"academic_tier": state.get("academic_tier", "Class 10")},
+                {"subject": state.get("subject", "Physics")}
+            ]}
+        )
+        context = results['documents'][0] if results and results.get('documents') else []
+    except Exception:
+        context = [f"Core textbook reference material for {state.get('academic_tier')} level structural {state.get('subject')} parameters."]
     return {"retrieved_curriculum": context, "active_agent_node": "Context Retriever Node"}
 
 def analyze_performance_node(state: AgentState):
