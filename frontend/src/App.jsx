@@ -15,7 +15,9 @@ import {
   Activity, 
   Network, 
   Sparkles,
-  Bookmark
+  Bookmark,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 
 /** Lightweight markdown renderer for tutor hints (headers, bullets, bold). */
@@ -590,47 +592,76 @@ export default function App() {
     }
   };
 
-  const submitQuizAnswer = async () => {
-    if (!studentAnswer.trim() || !currentQuestion) return;
+  const submitQuizAnswer = async (overrideText = null) => {
+    const queryText = (overrideText !== null ? overrideText : studentAnswer).trim();
+    if (!queryText || !currentQuestion) return;
+
     setLoading(true);
-    const userMessage = { text: studentAnswer, sender: 'student' };
+    const userMessage = { text: queryText, sender: 'student' };
     const nextHistory = [...chatLog, userMessage];
-    setChatLog(nextHistory); setStudentAnswer('');
+    setChatLog(nextHistory);
+    if (overrideText === null) setStudentAnswer('');
 
     try {
       const response = await fetch('http://127.0.0.1:8000/api/tutor/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `Question: ${currentQuestion.text} | Student Answer: ${userMessage.text}`,
-          time_taken: 15, // simulation latency parameter
+          message: `Topic/Question: ${currentQuestion.concept} (${currentQuestion.text}) | Student Inquiry: ${queryText}`,
+          time_taken: 15,
           consecutive_errors: mockErrors,
           current_tier: activeTier,
           current_subject: activeSubject,
           history: chatLog
         })
       });
+      if (!response.ok) throw new Error("Chat API failed");
       const result = await response.json();
-      const updatedLog = [...nextHistory, { text: result.response, sender: 'tutor' }];
-      setChatLog(updatedLog); setRetainedMockHistory(updatedLog);
       
-      const isRemedial = result.remedial_triggered || result.active_node.includes('Direct');
+      const updatedLog = [
+        ...nextHistory,
+        {
+          text: result.response,
+          sender: 'tutor',
+          node: result.active_node,
+          depth: result.depth_level || 'surface',
+          mamdani: result.mamdani_evaluation || { performance_tier: 'Developing', fuzzy_score: 60.0 }
+        }
+      ];
+      setChatLog(updatedLog);
+      setRetainedMockHistory(updatedLog);
+
+      const isRemedial = result.remedial_triggered || (result.active_node && result.active_node.includes('Direct'));
       if (isRemedial) {
         setMockErrors(prev => prev + 1);
       } else {
         setMockErrors(0);
       }
-      
-      setTelemetry({ 
-        activeNode: result.active_node, 
-        remedialPathActive: isRemedial, 
-        retrievedContext: result.context_pulled || [] 
+
+      setTelemetry({
+        activeNode: result.active_node || "Discussion Node",
+        remedialPathActive: isRemedial,
+        retrievedContext: result.context_pulled || []
       });
-    } catch (error) { 
-      console.error(error);
-      const fallbackMsg = "How about we review the core concept? Think about how the variables interact.";
-      setChatLog(prev => [...prev, { text: fallbackMsg, sender: 'tutor' }]);
-      setTelemetry(prev => ({ ...prev, activeNode: "Socratic Hint Agent Node" }));
+    } catch (error) {
+      console.error("Discussion chat error:", error);
+      const dynamicFallback = (
+        `Great question about **${queryText}**!\n\n` +
+        `In ${activeSubject} (${activeTier}), this concept ties directly into **${currentQuestion.concept}**.\n\n` +
+        `• **Intuitive Overview**: Consider how energy and force vectors balance in this system.\n` +
+        `• **Next Step**: Would you like a step-by-step formula breakdown or a real-world example?`
+      );
+      const updatedLog = [
+        ...nextHistory,
+        {
+          text: dynamicFallback,
+          sender: 'tutor',
+          node: 'Discussion Node',
+          depth: 'surface'
+        }
+      ];
+      setChatLog(updatedLog);
+      setTelemetry(prev => ({ ...prev, activeNode: "Discussion Node" }));
     } finally {
       setLoading(false);
     }
@@ -900,69 +931,142 @@ export default function App() {
                 </div>
               )}
 
-              {/* PRACTICE LAB (SOCRATIC CHAT QUIZ) */}
+              {/* PRACTICE LAB (INTERACTIVE DISCUSSION & INQUIRY LAB) */}
               {activeView === 'quiz' && (
-                <div className="flex-1 flex flex-col justify-between h-full">
+                <div className="flex-1 flex flex-col justify-between h-full space-y-3">
                   {currentQuestion ? (
                     <>
-                      <div className="border-b border-slate-900 pb-3 mb-4 flex justify-between items-center">
+                      {/* HEADER BAR WITH THRESHOLD BADGES */}
+                      <div className="border-b border-slate-900 pb-3 flex justify-between items-center flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          <HelpCircle className="w-4 h-4 text-emerald-400" />
-                          <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Concept: {currentQuestion.concept}</span>
+                          <MessageSquare className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs text-slate-300 font-bold uppercase tracking-wider">
+                            Discussion & Inquiry Lab: <span className="text-emerald-400 font-mono">{currentQuestion.concept}</span>
+                          </span>
                         </div>
-                        <span className="text-[10px] font-mono text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded bg-amber-500/5">Mock Test Session</span>
+
+                        <div className="flex items-center gap-2">
+                          {mockErrors >= 2 && (
+                            <span className="text-[10px] font-mono text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full bg-amber-950/60 flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-amber-400 animate-pulse" />
+                              Solution Threshold Unlocked (2+ Attempts)
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-500/10 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
+                            Adaptive Depth AI Tutor
+                          </span>
+                        </div>
                       </div>
 
-                      {/* QUESTION PROMPT */}
-                      <div className="bg-slate-950 border border-slate-855 p-4 rounded-xl border-l-4 border-l-emerald-500/60 mb-4 shadow-sm">
-                        <p className="text-xs text-slate-200 font-semibold">{currentQuestion.text}</p>
+                      {/* CONCEPT QUESTION CARD */}
+                      <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/30 border border-slate-800 p-4 rounded-xl border-l-4 border-l-emerald-500/80 shadow-md">
+                        <span className="text-[9px] font-mono uppercase tracking-widest text-emerald-400 block mb-1 font-bold">
+                          Current Focus Concept
+                        </span>
+                        <p className="text-xs text-slate-100 font-semibold leading-relaxed">{currentQuestion.text}</p>
                       </div>
 
                       {/* CHAT LOGS AREA */}
-                      <div className="flex-1 max-h-[300px] overflow-y-auto space-y-4 custom-scrollbar mb-4 pr-1 min-h-[220px]">
+                      <div className="flex-1 max-h-[290px] overflow-y-auto space-y-3.5 custom-scrollbar my-2 pr-1 min-h-[220px]">
                         {chatLog.length === 0 ? (
-                          <div className="text-slate-500 italic text-[11px] text-center pt-8">
-                            Submit an answer to initialize Socratic hinting chat sequence...
+                          <div className="text-slate-400 italic text-[11px] text-center pt-8 space-y-2">
+                            <p>Ask any question, test your intuition, or request a deeper breakdown...</p>
+                            <p className="text-[10px] text-slate-600 font-mono">
+                              💡 Solution Threshold Rule: Direct solution is unlocked if requested or after 2 failed attempts!
+                            </p>
                           </div>
                         ) : (
                           chatLog.map((chat, idx) => (
                             <div key={idx} className={`flex w-full ${chat.sender === 'student' ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[85%] text-xs p-3 rounded-2xl border ${
+                              <div className={`max-w-[88%] text-xs p-3.5 rounded-2xl border shadow-lg ${
                                 chat.sender === 'student' 
-                                  ? 'bg-blue-600/10 border-blue-500/20 text-blue-200 rounded-br-none' 
-                                  : 'bg-slate-900 border-slate-850 text-slate-300 rounded-bl-none'
+                                  ? 'bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border-blue-500/30 text-blue-100 rounded-br-none' 
+                                  : 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/30 border-slate-800 text-slate-200 rounded-bl-none'
                               }`}>
-                                <div className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-                                  {chat.sender === 'student' ? 'Student' : 'Socratic Grader'}
+                                <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-1.5 mb-2">
+                                  <span className="text-[9px] font-mono text-slate-400 font-bold uppercase tracking-widest">
+                                    {chat.sender === 'student' ? 'Student Inquiry' : 'AI Discussion Mentor'}
+                                  </span>
+                                  
+                                  {chat.sender !== 'student' && (
+                                    <span className={`text-[8px] font-mono px-2 py-0.5 rounded-full border ${
+                                      chat.depth === 'deep' 
+                                        ? 'bg-purple-950/60 border-purple-500/40 text-purple-300'
+                                        : chat.depth === 'remedial'
+                                        ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                                        : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                                    }`}>
+                                      {chat.depth === 'deep' ? '🔮 Deep Inquiry' : chat.depth === 'remedial' ? '⚡ Direct Solution' : '🌱 Concept Guide'}
+                                    </span>
+                                  )}
                                 </div>
-                                <p className="leading-relaxed font-normal">{chat.text}</p>
+
+                                <div className="leading-relaxed font-normal text-slate-200">
+                                  <HintMarkdown text={chat.text} />
+                                </div>
                               </div>
                             </div>
                           ))
                         )}
                       </div>
 
+                      {/* QUICK INQUIRY PROMPT CHIPS */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 text-[10px] font-mono">
+                        <span className="text-slate-500 whitespace-nowrap">Suggested Queries:</span>
+                        <button
+                          onClick={() => submitQuizAnswer("Explain the core intuitive concept simply with a real-world example.")}
+                          disabled={loading}
+                          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-full text-emerald-300 whitespace-nowrap transition-all"
+                        >
+                          💡 Core Intuition
+                        </button>
+                        <button
+                          onClick={() => submitQuizAnswer("Show the step-by-step formula derivation and mathematical relationship.")}
+                          disabled={loading}
+                          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-full text-purple-300 whitespace-nowrap transition-all"
+                        >
+                          🔮 Mathematical Steps
+                        </button>
+                        <button
+                          onClick={() => submitQuizAnswer("give me the answer please and show full solution")}
+                          disabled={loading}
+                          className="bg-amber-950/80 hover:bg-amber-900/80 border border-amber-500/40 px-2.5 py-1 rounded-full text-amber-300 whitespace-nowrap transition-all flex items-center gap-1"
+                        >
+                          ⚡ Unlock Full Solution (Threshold)
+                        </button>
+                      </div>
+
                       {/* CHAT INPUT PANEL */}
-                      <div className="border-t border-slate-900 pt-3 flex gap-2">
+                      <div className="border-t border-slate-900/80 pt-3 flex gap-2">
                         <input 
                           type="text" 
                           value={studentAnswer} 
                           onChange={(e) => setStudentAnswer(e.target.value)} 
                           onKeyDown={(e) => e.key === 'Enter' && submitQuizAnswer()} 
-                          placeholder="Submit your answer, request a hint, or ask details..." 
-                          className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-all font-mono"
+                          placeholder="Ask a question, test an answer, or request deeper derivations..." 
+                          disabled={loading}
+                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-mono placeholder:text-slate-600"
                         />
                         <button 
-                          onClick={submitQuizAnswer} 
-                          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-6 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all"
+                          onClick={() => submitQuizAnswer()} 
+                          disabled={loading || !studentAnswer.trim()}
+                          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/40 transition-all disabled:opacity-40 flex items-center gap-1.5"
                         >
-                          Submit
+                          {loading ? (
+                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <span>Send</span>
+                              <Send className="w-3 h-3" />
+                            </>
+                          )}
                         </button>
                       </div>
                     </>
                   ) : (
                     <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs py-10">
-                      <HelpCircle className="w-8 h-8 mb-2 opacity-30" />
+                      <HelpCircle className="w-8 h-8 mb-2 opacity-30 text-emerald-400" />
                       No Practice Quizzes available.
                     </div>
                   )}

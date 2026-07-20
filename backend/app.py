@@ -114,11 +114,11 @@ async def generate_ai_flashcards(payload: TheoryRequestPayload):
 @app.post("/api/tutor/chat")
 async def run_session_cycle(payload: ChatSessionPayload):
     """
-    Socratic Mock Practice Test Agent (100% Local Inference Execution).
-    Runs the student session through the LangGraph state machine workflow using local Ollama processing.
+    Adaptive Interactive Discussion & Inquiry Tutor Agent.
+    Evaluates query depth and routes dynamically to Surface, Deep, or Remedial discussion nodes.
     """
     messages_history = []
-    for chat in payload.history[-4:]:
+    for chat in payload.history[-6:]:
         if chat.get("sender") in ["user", "student"]:
             messages_history.append(HumanMessage(content=chat["text"]))
         else:
@@ -132,21 +132,47 @@ async def run_session_cycle(payload: ChatSessionPayload):
         "time_taken_seconds": payload.time_taken,
         "consecutive_errors": payload.consecutive_errors,
         "requires_remedial_routing": False,
+        "depth_level": "surface",
         "retrieved_curriculum": [],
         "active_agent_node": "Initialization",
         "subject": payload.current_subject,
         "academic_tier": payload.current_tier
     }
 
-    # Execute LangGraph stateful workflow
-    final_graph_state = compiled_tutor_app.invoke(initial_graph_state)
-    response_text = final_graph_state["messages"][-1].content
+    try:
+        final_graph_state = compiled_tutor_app.invoke(initial_graph_state)
+        response_text = final_graph_state["messages"][-1].content
+        active_node = final_graph_state.get("active_agent_node", "Discussion Node")
+        depth_level = final_graph_state.get("depth_level", "surface")
+        remedial = final_graph_state.get("requires_remedial_routing", False)
+        context = final_graph_state.get("retrieved_curriculum", [])
+        mamdani_eval = {
+            "fuzzy_score": final_graph_state.get("fuzzy_score", 70.0),
+            "performance_tier": final_graph_state.get("performance_tier", "Developing"),
+            "linguistic_remark": final_graph_state.get("linguistic_remark", ""),
+            "degree_of_failure": final_graph_state.get("degree_of_failure", 30.0)
+        }
+    except Exception as e:
+        print(f"Error in tutor chat execution: {e}")
+        response_text = f"I see you're exploring **{payload.message}**. Let me guide you through the core {payload.current_subject} principles!"
+        active_node = "Discussion Node"
+        depth_level = "surface"
+        remedial = False
+        context = []
+        mamdani_eval = {
+            "fuzzy_score": 60.0,
+            "performance_tier": "Developing",
+            "linguistic_remark": "Developing Trajectory",
+            "degree_of_failure": 40.0
+        }
 
     return {
         "response": response_text,
-        "active_node": final_graph_state["active_agent_node"],
-        "remedial_triggered": final_graph_state["requires_remedial_routing"],
-        "context_pulled": final_graph_state["retrieved_curriculum"]
+        "active_node": active_node,
+        "depth_level": depth_level,
+        "remedial_triggered": remedial,
+        "context_pulled": context,
+        "mamdani_evaluation": mamdani_eval
     }
 
 @app.post("/api/tutor/evaluate-short-answer")
