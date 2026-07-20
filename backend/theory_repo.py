@@ -19,12 +19,6 @@ FLASHCARD_REPOSITORY = {
                     "topic": "Kinematics & Constant Velocity",
                     "question": "What is the mathematical value of acceleration when a vehicle travels at a constant velocity?",
                     "answer": "• Constant Velocity Rule: Constant velocity means speed and direction remain perfectly steady over time.\n• Acceleration Profile: Because velocity variation is exactly zero, acceleration is mathematically 0 m/s² (e.g., a car traveling steadily at 20 m/s for 10 seconds has 0 acceleration)."
-                },
-                {
-                    "id": "p10_c4",
-                    "topic": "Mechanical Work & Power",
-                    "question": "How do you calculate physical work and how is system power determined?",
-                    "answer": "• Work Equation: Work is performed when force moves an object a distance in the direction of that force (Work = Force x Distance).\n• Power Metric: Power measures the time rate at which this energy is consumed or transformed (Power = Work / time)."
                 }
             ],
             "quizzes": [
@@ -106,6 +100,12 @@ FLASHCARD_REPOSITORY = {
                     "topic": "Hamiltonian Phase Spaces",
                     "question": "How does the Hamiltonian formulation shift mechanical tracking variables?",
                     "answer": "• Variable Shift: Transitions from generalized velocities to conjugate momenta parameters.\n• Total System Energy: Represents total mechanical energy (H = T + V), generating first-order partial differential equations across continuous phase space fields."
+                },
+                {
+                    "id": "pug_c3",
+                    "topic": "Quantum State Operators & Observables",
+                    "question": "How do quantum mechanical operators correspond to physical measurable observables?",
+                    "answer": "• Hermitian Operators: Physical observables (energy, momentum) correspond to linear Hermitian operators in Hilbert space.\n• Eigenvalue Principle: Measurement outcomes yield real eigenvalues corresponding to operator eigenstates."
                 }
             ],
             "quizzes": [
@@ -128,9 +128,21 @@ FLASHCARD_REPOSITORY = {
             "cards": [
                 {
                     "id": "b10_c1",
-                    "topic": "Cellular Energy",
+                    "topic": "Cellular Energy & Mitochondria",
                     "question": "What is the primary function of mitochondria in a eukaryotic cell?",
-                    "answer": "• Cellular Organelles: Mitochondria are specialized membrane-bound subunits inside cells.\n• Power Generation: They act as cellular power plants, running respiration processes to convert nutrients into high-energy ATP molecules."
+                    "answer": "• Cellular Organelles: Mitochondria are specialized double-membrane organelles inside cells.\n• Power Generation: They produce ATP through cellular respiration, converting glucose and oxygen into usable chemical energy."
+                },
+                {
+                    "id": "b10_c2",
+                    "topic": "Photosynthesis & Light Reactions",
+                    "question": "How do plants convert sunlight into chemical energy during photosynthesis?",
+                    "answer": "• Chloroplast Function: Chlorophyll pigments capture solar photons inside thylakoid membranes.\n• Chemical Output: Light-dependent reactions convert water and carbon dioxide into glucose and oxygen gas (6CO2 + 6H2O -> C6H12O6 + 6O2)."
+                },
+                {
+                    "id": "b10_c3",
+                    "topic": "DNA Structure & Double Helix",
+                    "question": "What structural components make up the genetic code in a DNA double helix?",
+                    "answer": "• Sugar-Phosphate Backbone: Alternating deoxyribose sugars and phosphate molecules form structural sides.\n• Nitrogenous Base Pairs: Adenine pairs with Thymine (A-T), and Cytosine pairs with Guanine (C-G) to store sequence data."
                 }
             ],
             "quizzes": [
@@ -154,6 +166,18 @@ FLASHCARD_REPOSITORY = {
                     "topic": "Transcription Enzymes",
                     "question": "What specific enzyme binds to DNA to synthesize single-stranded mRNA during transcription?",
                     "answer": "• Transcription Boundary: Transcription converts genetic data from DNA into a complementary RNA sequence.\n• Active Enzyme: RNA Polymerase binds to a promoter region, unzips the helix, and matches nucleotides to build the single-stranded mRNA."
+                },
+                {
+                    "id": "b12_c2",
+                    "topic": "Enzyme Kinetics & Catalysis",
+                    "question": "How do enzyme biological catalysts increase the rate of metabolic reactions?",
+                    "answer": "• Activation Energy Barrier: Enzymes lower the activation energy required to initiate chemical reactions.\n• Active Site Specificity: Substrates bind precisely into enzyme active sites forming unstable transition-state complexes."
+                },
+                {
+                    "id": "b12_c3",
+                    "topic": "Cellular Respiration & Krebs Cycle",
+                    "question": "What takes place during the citric acid (Krebs) cycle within the mitochondrial matrix?",
+                    "answer": "• Pyruvate Processing: Acetyl-CoA is oxidized through a series of enzyme-driven steps.\n• Electron Carriers: Produces NADH, FADH2, and ATP while releasing CO2 as a byproduct to drive electron transport chains."
                 }
             ],
             "quizzes": [
@@ -177,6 +201,18 @@ FLASHCARD_REPOSITORY = {
                     "topic": "Epigenetic Modification",
                     "question": "What group of specialized enzymes catalyzes the addition of methyl groups to histone tails to enforce silencing?",
                     "answer": "• Chromatin Alterations: Epigenetics adjusts gene expression without changing the core underlying DNA sequence.\n• Silencing Mechanism: Histone Methyltransferases add methyl groups to histone tails, compressing chromatin to silence transcription."
+                },
+                {
+                    "id": "bug_c2",
+                    "topic": "Signal Transduction Cascades",
+                    "question": "How do cell-surface G-protein coupled receptors (GPCRs) amplify extracellular signals inside cells?",
+                    "answer": "• Receptor Activation: Ligand binding induces conformational change in seven-transmembrane GPCR domain.\n• Second Messengers: Activates heterotrimeric G-proteins to trigger cAMP or IP3 secondary messenger cascades."
+                },
+                {
+                    "id": "bug_c3",
+                    "topic": "CRISPR-Cas9 Gene Editing",
+                    "question": "What mechanism enables the CRISPR-Cas9 complex to introduce site-specific double-stranded breaks in DNA?",
+                    "answer": "• Guide RNA Targeting: Synthetic single guide RNA (sgRNA) matches a 20-nucleotide target genomic sequence.\n• Endonuclease Cleavage: Cas9 enzyme scans for adjacent PAM motifs and cuts target DNA strands precisely."
                 }
             ],
             "quizzes": [
@@ -202,6 +238,18 @@ FLASHCARD_REPOSITORY = {
                     "topic": "Linear Equations",
                     "question": "How do you solve for x in a linear equation like 3x + 7 = 22?",
                     "answer": "• Balance Rule: A linear equation must remain balanced by applying equal transformations to both sides.\n• Isolation Sequence: Subtract 7 from both sides to clear addition (3x = 15), then apply inverse multiplication by dividing by 3 to find x = 5."
+                },
+                {
+                    "id": "m10_c2",
+                    "topic": "Quadratic Formula & Discriminant",
+                    "question": "What is the Quadratic Formula and how does the discriminant indicate root types?",
+                    "answer": "• Solution Formula: x = (-b ± √(b² - 4ac)) / (2a) solves any quadratic equation ax² + bx + c = 0.\n• Discriminant Metric: Δ = b² - 4ac determines roots: Δ > 0 (two real roots), Δ = 0 (one real root), Δ < 0 (complex roots)."
+                },
+                {
+                    "id": "m10_c3",
+                    "topic": "Pythagorean Theorem & Trigonometry",
+                    "question": "How do side ratios define Sine, Cosine, and Tangent in right-angled triangles?",
+                    "answer": "• Fundamental Theorem: a² + b² = c² relates leg lengths to hypotenuse in right triangles.\n• Trigonometric Ratios: sin(θ) = Opposite/Hypotenuse, cos(θ) = Adjacent/Hypotenuse, tan(θ) = Opposite/Adjacent."
                 }
             ],
             "quizzes": [
@@ -225,6 +273,18 @@ FLASHCARD_REPOSITORY = {
                     "topic": "The Power Rule",
                     "question": "What is the derivative of the polynomial function f(x) = 3x² + 2x using the Power Rule?",
                     "answer": "• Derivative Definition: Calculates the instantaneous rate of change or slope of a function at an exact coordinate point.\n• Calculation: Applying the Power Rule (the derivative of x^n is n * x^(n-1)) to each term independently yields exactly 6x + 2."
+                },
+                {
+                    "id": "m12_c2",
+                    "topic": "Integration & Definite Integrals",
+                    "question": "How does integration reverse differentiation to find the area under a curve?",
+                    "answer": "• Antiderivative Concept: Integration calculates accumulation by reversing derivative operations (∫ x^n dx = x^(n+1)/(n+1) + C).\n• Definite Integral: Evaluates the total area bounded by a function between limits a and b: ∫[a to b] f(x)dx = F(b) - F(a)."
+                },
+                {
+                    "id": "m12_c3",
+                    "topic": "Limits & Continuity",
+                    "question": "What condition must be satisfied for a mathematical function f(x) to be continuous at x = c?",
+                    "answer": "• Existence Criteria: The function value f(c) must be defined and the limit lim(x->c) f(x) must exist.\n• Continuity Match: The left-hand limit, right-hand limit, and actual function value must be equal: lim(x->c) f(x) = f(c)."
                 }
             ],
             "quizzes": [
@@ -248,6 +308,18 @@ FLASHCARD_REPOSITORY = {
                     "topic": "Fundamental Theorem of Calculus",
                     "question": "How does the Fundamental Theorem of Calculus simplify bounded continuous integration?",
                     "answer": "• Fundamental Link: Formally connects differentiation and integration as inverse structural operations.\n• Resolution Rule: Proves that the definite integral of f(x) from a to b can be resolved by tracking the anti-derivative boundaries: F(b) - F(a)."
+                },
+                {
+                    "id": "mug_c2",
+                    "topic": "Eigenvalues & Eigenvectors",
+                    "question": "What is the defining characteristic equation of an eigenvector v for a linear matrix transformation A?",
+                    "answer": "• Matrix Transformation: An eigenvector v maintains its directional orientation when transformed by matrix A.\n• Characteristic Relation: Av = λv, where scalar λ represents the corresponding eigenvalue found via det(A - λI) = 0."
+                },
+                {
+                    "id": "mug_c3",
+                    "topic": "Multivariable Partial Derivatives",
+                    "question": "What does the gradient vector ∇f represent for a scalar function of multiple variables f(x, y, z)?",
+                    "answer": "• Partial Derivatives: Measures instantaneous rate of change along individual coordinate axes independently.\n• Gradient Direction: ∇f = (∂f/∂x, ∂f/∂y, ∂f/∂z) points in the direction of maximum rate of increase of the function."
                 }
             ],
             "quizzes": [

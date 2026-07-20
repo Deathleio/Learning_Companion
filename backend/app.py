@@ -14,6 +14,8 @@ from fuzzy_engine import FuzzyMarkingSystem
 from analytics import PathPerformanceAnalytics
 from theory_repo import FLASHCARD_REPOSITORY
 from tutor_graph import compiled_tutor_app
+from flashcard_builder import build_flashcards_from_chroma, generate_gemini_flashcards_from_chroma, _gemini_flashcard_cache
+from hint_utils import sanitize_gap_analysis, sanitize_hint_text, HINT_FORMAT_DIRECTIVE
 
 app = FastAPI(title="Unified Agentic Socratic Tutoring Platform")
 
@@ -82,11 +84,32 @@ def execute_rag_vector_lookup(subject: str, tier: str, query: str) -> list[str]:
 async def load_dynamic_theory(payload: TheoryRequestPayload):
     subject_repo = FLASHCARD_REPOSITORY.get(payload.current_subject, {})
     tier_data = subject_repo.get(payload.current_tier, {"cards": [], "quizzes": [], "finalExam": []})
+    
+    # Check if AI cards are already cached for this subject/tier
+    cache_key = (payload.current_subject, payload.current_tier)
+    if cache_key in _gemini_flashcard_cache:
+        cards = _gemini_flashcard_cache[cache_key]
+        is_ai = True
+    else:
+        cards = tier_data.get("cards", [])[:3]
+        is_ai = False
+
     return {
-        "cards": tier_data.get("cards", []),
+        "cards": cards,
         "quizzes": tier_data.get("quizzes", []),
-        "finalExam": tier_data.get("finalExam", [])
+        "finalExam": tier_data.get("finalExam", []),
+        "is_ai_generated": is_ai,
+        "is_cached": cache_key in _gemini_flashcard_cache
     }
+
+@app.post("/api/tutor/generate-flashcards")
+async def generate_ai_flashcards(payload: TheoryRequestPayload):
+    """
+    Triggers explicit Gemini RAG flashcard generation (max 3 cards) from ChromaDB chunks.
+    Uses in-memory caching to minimize LLM token cost.
+    """
+    result = generate_gemini_flashcards_from_chroma(payload.current_subject, payload.current_tier)
+    return result
 
 @app.post("/api/tutor/chat")
 async def run_session_cycle(payload: ChatSessionPayload):
@@ -171,7 +194,8 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
         "  A) Score the student's answer with partial credit (accept unit variants, rounding ±5%, white-space).\n"
         "  B) Write a 1-2 sentence gap_analysis that describes the SPECIFIC error in the student's\n"
         "     submission. Be precise: name the wrong value, missing concept, incorrect unit, wrong sign,\n"
-        "     or missing step. Do NOT be generic ('the answer is wrong'). Reference the student's actual words.\n\n"
+        "     or missing step. Do NOT be generic ('the answer is wrong'). Reference the student's actual words.\n"
+        "     CRITICAL: Never reveal the correct answer, expected value, or final numerical result.\n\n"
         "Respond ONLY with a minified JSON object — no markdown, no explanation:\n"
         '{"accuracy_percentage": <float 0.0-100.0>, "is_logically_correct": <true|false>, '
         '"gap_analysis": "<1-2 sentence diagnosis of the exact error in the student\'s answer>"}'
@@ -183,13 +207,18 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
         diag_data  = json.loads(clean_json)
         base_accuracy = float(diag_data.get("accuracy_percentage", 0.0))
         is_correct    = bool(diag_data.get("is_logically_correct", False))
-        gap_analysis  = str(diag_data.get("gap_analysis", gap_analysis)).strip()
+        gap_analysis  = sanitize_gap_analysis(
+            str(diag_data.get("gap_analysis", gap_analysis)).strip(),
+            payload.expected_answer,
+        )
     except Exception:
         is_correct    = payload.student_raw_input.strip().lower() == payload.expected_answer.strip().lower()
         base_accuracy = 100.0 if is_correct else 0.0
-        gap_analysis  = (
-            f"The student wrote '{payload.student_raw_input}' but the expected answer "
-            f"is '{payload.expected_answer}'."
+        gap_analysis  = sanitize_gap_analysis(
+            f"The student wrote '{payload.student_raw_input}', but the approach or result "
+            f"does not yet satisfy the problem requirements. Review the governing relationship "
+            f"for this question type.",
+            payload.expected_answer,
         )
 
     # ══════════════════════════════════════════════════════════════════════════════
@@ -217,8 +246,7 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
         shared_context = (
             f"SUBJECT: {payload.current_subject} | LEVEL: {payload.current_tier}\n"
             f"QUESTION: {payload.question_text}\n"
-            f"STUDENT'S ANSWER: {payload.student_raw_input}\n"
-            f"EXPECTED ANSWER: {payload.expected_answer}\n\n"
+            f"STUDENT'S ANSWER: {payload.student_raw_input}\n\n"
             f"MAMDANI FUZZY SYSTEM DIAGNOSIS:\n"
             f"  Performance Tier   : {performance_tier}\n"
             f"  Fuzzy Score        : {fuzzy_score}%\n"
@@ -226,21 +254,26 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
             f"  Linguistic Verdict : {linguistic_remark}\n\n"
             f"SPECIFIC ERROR IN STUDENT'S ANSWER (from diagnostic engine):\n"
             f"  {gap_analysis}\n\n"
+            f"GOVERNING FORMULA / KEY CONCEPT (internal reference — do NOT reveal final result):\n"
+            f"  {payload.hint_formula or 'derive from question parameters'}\n\n"
         )
 
         if degree_of_failure >= 60.0:
-            # ── INTERVENTION REQUIRED: Full remediation with formula ──────────
+            # ── INTERVENTION REQUIRED: Structured conceptual walkthrough ─────
             hint_prompt = (
                 "You are an academic remediation tutor. The Mamdani Fuzzy System has classified "
-                "this student in the 'Intervention Required' tier — they need a full worked solution.\n\n"
+                "this student in the 'Intervention Required' tier — they need structured guidance.\n\n"
                 + shared_context +
-                f"GOVERNING FORMULA / KEY CONCEPT: {payload.hint_formula or 'derive from question'}\n\n"
+                f"KNOWN MISCONCEPTION PATTERN: {payload.hint_misconception or 'general conceptual gap'}\n\n"
                 "DIRECTIVE:\n"
                 "1. In ONE sentence, confirm exactly what the student got wrong (reference their answer).\n"
-                "2. State the governing formula clearly.\n"
-                "3. Substitute the correct values step-by-step and show the full solution.\n"
-                "4. Keep the language direct and encouraging.\n"
+                "2. Explain the governing formula or concept in plain language.\n"
+                "3. Walk through the setup steps (identify variables, choose the right operation) "
+                "   WITHOUT computing or stating the final numerical answer.\n"
+                "4. End with one encouraging prompt for the student to finish the calculation themselves.\n"
+                "STRICT RULE: Never state the final answer, exact result, or completed substitution.\n"
                 "Do NOT be generic. Every sentence must be about THIS student's specific mistake."
+                + HINT_FORMAT_DIRECTIVE
             )
         else:
             # ── DEVELOPING: Targeted Socratic nudge ──────────────────────────
@@ -255,26 +288,31 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
                 "2. Ask ONE Socratic question that leads them to discover the correct approach "
                 "   without giving away the answer or formula.\n"
                 "3. Optionally add a one-sentence conceptual reminder.\n"
+                "STRICT RULE: Never state the final answer, exact result, or completed substitution.\n"
                 "Do NOT be generic. Every sentence must address THIS student's specific error."
+                + HINT_FORMAT_DIRECTIVE
             )
 
         try:
             response      = model.invoke([HumanMessage(content=hint_prompt)])
-            hint_response = response.content
+            hint_response = sanitize_hint_text(response.content, payload.expected_answer)
         except Exception as e:
             print("GEMINI API ERROR IN EVALUATE-SHORT-ANSWER:", e)
             if degree_of_failure >= 60.0:
-                hint_response = (
-                    f"Fuzzy System Calibration: Intervention Required. Let's walk through the concept.\n"
-                    f"Governing Formula: {payload.hint_formula or 'Determine relation from question parameters'}.\n"
-                    f"Remediation Analysis: {gap_analysis}\n"
-                    f"Focus on substituting the known values step-by-step to calculate the correct answer."
+                hint_response = sanitize_hint_text(
+                    "## Concept Review\n"
+                    f"- **Focus:** {gap_analysis}\n"
+                    f"- **Key relationship:** {payload.hint_formula or 'Identify how the given quantities relate.'}\n"
+                    "- **Next step:** Substitute the known values and finish the calculation on your own.",
+                    payload.expected_answer,
                 )
             else:
-                hint_response = (
-                    f"Fuzzy System Calibration: Developing Trajectory. You are very close!\n"
-                    f"Socratic Nudge: Look closely at your values. Did you apply the operation correctly?\n"
-                    f"Misconception Hint: {payload.hint_misconception or 'Double check calculation order.'}"
+                hint_response = sanitize_hint_text(
+                    "## Socratic Nudge\n"
+                    "- You are close — re-check whether you applied the correct operation.\n"
+                    f"- **Common pitfall:** {payload.hint_misconception or 'Double-check calculation order.'}\n"
+                    "- What relationship between the given values might you have overlooked?",
+                    payload.expected_answer,
                 )
     else:
         hint_response = (
@@ -415,12 +453,12 @@ async def evaluate_final_exam(payload: ExamSubmissionPayload):
         )
     else:  # Intervention Required
         level_instruction = (
-            "Decided Hint Level: LEVEL 1 - DEEP CONCEPT WALKTHROUGH & FORMULA REMEDIATION (Intervention Required)\n"
+            "Decided Hint Level: LEVEL 1 - FOUNDATION REBUILD STUDY PLAN (Intervention Required)\n"
             "DIRECTIVE:\n"
             "1. Reassure the student and provide an encouraging, highly structured study path.\n"
             "2. Identify every failed topic clearly.\n"
-            "3. State the governing formulas and explain the core concepts step-by-step for those failed topics.\n"
-            "4. Provide a structured review checklist or revision guide to help rebuild their foundation."
+            "3. Explain the core concepts for those topics WITHOUT giving worked solutions or final answers.\n"
+            "4. Provide a structured review checklist with practice suggestions (concept review, not answer keys)."
         )
 
     hint_prompt = (
@@ -429,9 +467,10 @@ async def evaluate_final_exam(payload: ExamSubmissionPayload):
         + prompt_context +
         level_instruction + "\n\n"
         "FORMATTING REQUIREMENT:\n"
-        "- Respond in clean, readable, professional markdown.\n"
+        "- Respond in clean, readable, professional markdown with ## headers and bullet lists.\n"
         "- Keep it concise, engaging, and highly personalized. Address the student directly as 'You'.\n"
-        "- Do not use placeholders. Use actual subject names, topics, and values from the context."
+        "- Do not use placeholders. Use actual subject names and topics from the context.\n"
+        "- NEVER reveal final exam answers, exact numerical results, or completed substitutions."
     )
 
     remediation_hint = ""
@@ -459,14 +498,15 @@ async def evaluate_final_exam(payload: ExamSubmissionPayload):
         else:
             remediation_steps = ""
             for idx, q in enumerate(incorrect_details, 1):
-                formula_part = f" (Formula: {q['formula']})" if q['formula'] else ""
-                remediation_steps += f"  - Topic: {q['topic']}{formula_part}\n"
-            remediation_steps = remediation_steps or "  - Review all module formulas.\n"
+                remediation_steps += f"  - **{q['topic']}**: review the underlying concept and practice similar problems.\n"
+            remediation_steps = remediation_steps or "  - Review core module concepts and practice untimed drills.\n"
             return (
-                f"Targeted review recommended. Let's rebuild your foundation (Overall Score: {calculated_score}%).\n\n"
-                f"**Level 1 Deep Concept Walkthrough:** Focus on these areas:\n"
+                f"## Foundation Rebuild Plan\n"
+                f"Targeted review recommended (Overall Score: {calculated_score}%).\n\n"
+                f"### Topics to revisit\n"
                 f"{remediation_steps}\n"
-                f"*Study Advice: Write down these formulas and practice at least 3 basic calculations for each before retaking the assessment.*"
+                f"### Study advice\n"
+                f"- Re-read each topic's key relationships, then solve 3 practice problems without looking at solutions."
             )
 
     if api_key:
@@ -474,6 +514,11 @@ async def evaluate_final_exam(payload: ExamSubmissionPayload):
             model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, google_api_key=api_key)
             response = model.invoke([HumanMessage(content=hint_prompt)])
             remediation_hint = response.content.strip()
+            for q in incorrect_details:
+                repo_q = exam_questions.get(q.get("qId", ""), {})
+                expected = repo_q.get("expected", "")
+                if expected:
+                    remediation_hint = sanitize_hint_text(remediation_hint, expected)
         except Exception as e:
             print("GEMINI API ERROR IN EVALUATE-EXAM:", e)
             remediation_hint = get_fallback_hint()

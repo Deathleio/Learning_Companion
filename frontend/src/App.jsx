@@ -18,6 +18,73 @@ import {
   Bookmark
 } from 'lucide-react';
 
+/** Lightweight markdown renderer for tutor hints (headers, bullets, bold). */
+function formatInlineMarkdown(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-semibold text-slate-200">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+function HintMarkdown({ text, className = '' }) {
+  if (!text) return null;
+
+  const blocks = [];
+  let listItems = [];
+  let listType = null;
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    const ListTag = listType === 'ordered' ? 'ol' : 'ul';
+    const listClass = listType === 'ordered' ? 'list-decimal' : 'list-disc';
+    blocks.push(
+      <ListTag key={`list-${blocks.length}`} className={`${listClass} ml-4 space-y-1 my-1.5`}>
+        {listItems.map((item, idx) => (
+          <li key={idx} className="leading-relaxed">{formatInlineMarkdown(item)}</li>
+        ))}
+      </ListTag>
+    );
+    listItems = [];
+    listType = null;
+  };
+
+  text.split('\n').forEach((rawLine, lineIdx) => {
+    const line = rawLine.trim();
+    if (!line) {
+      flushList();
+      return;
+    }
+
+    if (line.startsWith('### ')) {
+      flushList();
+      blocks.push(<h5 key={lineIdx} className="font-bold text-[11px] mt-2 mb-1 text-slate-200">{formatInlineMarkdown(line.slice(4))}</h5>);
+    } else if (line.startsWith('## ')) {
+      flushList();
+      blocks.push(<h4 key={lineIdx} className="font-bold text-xs mt-2 mb-1 text-slate-100">{formatInlineMarkdown(line.slice(3))}</h4>);
+    } else if (line.startsWith('# ')) {
+      flushList();
+      blocks.push(<h3 key={lineIdx} className="font-bold text-sm mt-2 mb-1">{formatInlineMarkdown(line.slice(2))}</h3>);
+    } else if (/^[-*]\s+/.test(line)) {
+      if (listType && listType !== 'unordered') flushList();
+      listType = 'unordered';
+      listItems.push(line.replace(/^[-*]\s+/, ''));
+    } else if (/^\d+\.\s+/.test(line)) {
+      if (listType && listType !== 'ordered') flushList();
+      listType = 'ordered';
+      listItems.push(line.replace(/^\d+\.\s+/, ''));
+    } else {
+      flushList();
+      blocks.push(<p key={lineIdx} className="leading-relaxed">{formatInlineMarkdown(line)}</p>);
+    }
+  });
+  flushList();
+
+  return <div className={`space-y-1 ${className}`}>{blocks}</div>;
+}
+
 const FALLBACK_CURRICULUM = {
   Physics: {
     'Class 10': {
@@ -222,6 +289,9 @@ export default function App() {
   // Flashcard Flip State
   const [cardIndex, setCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [isGeneratingCards, setIsGeneratingCards] = useState(false);
+  const [isAiGeneratedCards, setIsAiGeneratedCards] = useState(false);
+  const [isCardsCached, setIsCardsCached] = useState(false);
 
   // Socratic Mock Test States
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -274,6 +344,8 @@ export default function App() {
   const loadCurriculum = async (subject, tier) => {
     setLoading(true);
     clearSessions();
+    setIsAiGeneratedCards(false);
+    setIsCardsCached(false);
     try {
       const response = await fetch('http://127.0.0.1:8000/api/tutor/load-theory', {
         method: 'POST',
@@ -282,9 +354,11 @@ export default function App() {
       });
       if (!response.ok) throw new Error("API call failed");
       const data = await response.json();
-      setCards(data.cards || []);
+      setCards((data.cards || []).slice(0, 3));
       setQuizzes(data.quizzes || []);
-      setFinalExams(data.quizzes ? data.finalExam : []); // ensure finalExam matches quizzes existence
+      setFinalExams(data.finalExam || []);
+      setIsAiGeneratedCards(!!data.is_ai_generated);
+      setIsCardsCached(!!data.is_cached);
       
       if (data.quizzes && data.quizzes.length > 0) {
         setCurrentQuestion(data.quizzes[0]);
@@ -293,7 +367,7 @@ export default function App() {
       console.warn("Backend API not reachable. Loading frontend fallback curriculum database...", e);
       // Fallback load
       const fallback = FALLBACK_CURRICULUM[subject]?.[tier] || { cards: [], quizzes: [], finalExam: [] };
-      setCards(fallback.cards || []);
+      setCards((fallback.cards || []).slice(0, 3));
       setQuizzes(fallback.quizzes || []);
       setFinalExams(fallback.finalExam || []);
       if (fallback.quizzes && fallback.quizzes.length > 0) {
@@ -301,6 +375,30 @@ export default function App() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateAiFlashcards = async () => {
+    setIsGeneratingCards(true);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/tutor/generate-flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_subject: activeSubject, current_tier: activeTier })
+      });
+      if (!response.ok) throw new Error("Failed to generate AI flashcards");
+      const data = await response.json();
+      if (data.cards && data.cards.length > 0) {
+        setCards(data.cards.slice(0, 3));
+        setCardIndex(0);
+        setIsFlipped(false);
+        setIsAiGeneratedCards(true);
+        setIsCardsCached(!!data.cached);
+      }
+    } catch (e) {
+      console.error("AI Flashcard generation error:", e);
+    } finally {
+      setIsGeneratingCards(false);
     }
   };
 
@@ -675,48 +773,88 @@ export default function App() {
               
               {/* STUDY DECK VIEW */}
               {activeView === 'theory' && (
-                <div className="flex-1 flex flex-col justify-between h-full">
+                <div className="flex-1 flex flex-col justify-between h-full space-y-4">
+                  
+                  {/* TOP CONTROL BAR */}
+                  <div className="flex flex-wrap justify-between items-center border-b border-slate-900/80 pb-3 gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4 text-purple-400" />
+                        Textbook Study Guides
+                      </span>
+                      {isAiGeneratedCards && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-950/60 border border-purple-500/40 text-purple-300 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
+                          RAG AI Generated (3 Cards) {isCardsCached && <span className="text-emerald-400 font-bold ml-1">• Cached</span>}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-mono text-slate-400 bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-900">
+                        Card {cards.length > 0 ? cardIndex + 1 : 0} of {cards.length}
+                      </span>
+                      
+                      <button
+                        onClick={generateAiFlashcards}
+                        disabled={isGeneratingCards}
+                        className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl shadow-lg shadow-purple-950/50 hover:shadow-purple-900/60 transition-all flex items-center gap-1.5 disabled:opacity-50 border border-purple-400/30"
+                      >
+                        {isGeneratingCards ? (
+                          <>
+                            <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                            <span>Generating RAG...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                            <span>Generate AI Flashcards</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3D PERSPECTIVE FLIP CARD CONTAINER */}
                   {cards.length > 0 ? (
                     <>
-                      <div className="flex justify-between items-center border-b border-slate-900 pb-3 mb-6">
-                        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                          <BookOpen className="w-4 h-4 text-blue-400" />
-                          Textbook study guides
-                        </span>
-                        <span className="text-[11px] font-mono text-slate-500">Card {cardIndex + 1} of {cards.length}</span>
-                      </div>
-
-                      {/* 3D PERSPECTIVE FLIP CARD CONTAINER */}
-                      <div className="flex-1 flex items-center justify-center py-4">
+                      <div className="flex-1 flex items-center justify-center py-2">
                         <div 
                           onClick={() => setIsFlipped(!isFlipped)} 
-                          className="flip-card w-full max-w-[460px] h-[300px] cursor-pointer"
+                          className="flip-card w-full max-w-[480px] h-[310px] cursor-pointer group"
                         >
                           <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
                             
                             {/* FRONT SIDE */}
-                            <div className="flip-card-front bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700/80 p-6 flex flex-col justify-between items-center text-center shadow-xl">
-                              <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            <div className="flip-card-front bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/40 border border-purple-900/30 hover:border-purple-500/50 p-6 flex flex-col justify-between items-center text-center shadow-2xl rounded-2xl relative overflow-hidden transition-all duration-300">
+                              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
+                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-inner">
                                 {cards[cardIndex]?.topic}
                               </span>
-                              <p className="text-base font-semibold leading-relaxed text-slate-200 max-w-[360px]">
+                              <p className="text-base font-semibold leading-relaxed text-slate-100 max-w-[380px]">
                                 {cards[cardIndex]?.question}
                               </p>
-                              <span className="text-[11px] text-slate-500 flex items-center gap-1 hover:text-slate-400 transition-colors">
-                                <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />
+                              <span className="text-[11px] text-purple-300/70 flex items-center gap-1.5 font-medium group-hover:text-purple-300 transition-colors">
+                                <Sparkles className="w-3.5 h-3.5 text-yellow-400 animate-bounce" />
                                 Click to Flip Card
                               </span>
                             </div>
 
                             {/* BACK SIDE */}
-                            <div className="flip-card-back bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 flex flex-col justify-between items-start text-left shadow-xl overflow-y-auto custom-scrollbar">
-                              <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500">
-                                Conceptual breakdown
-                              </span>
-                              <div className="flex-1 w-full mt-4 text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap">
+                            <div className="flip-card-back bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-900/40 p-6 flex flex-col justify-between items-start text-left shadow-2xl rounded-2xl overflow-y-auto custom-scrollbar relative">
+                              <div className="flex justify-between items-center w-full border-b border-indigo-900/30 pb-2">
+                                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
+                                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                                  Conceptual Breakdown
+                                </span>
+                                <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40">
+                                  {cards[cardIndex]?.topic}
+                                </span>
+                              </div>
+                              <div className="flex-1 w-full mt-3 text-xs text-slate-200 font-mono leading-relaxed whitespace-pre-wrap">
                                 {cards[cardIndex]?.answer}
                               </div>
-                              <span className="text-[10px] text-slate-500 mt-2">
+                              <span className="text-[10px] text-indigo-300/70 mt-2 font-medium">
                                 Click to return
                               </span>
                             </div>
@@ -726,26 +864,26 @@ export default function App() {
                       </div>
 
                       {/* CARD NAVIGATION */}
-                      <div className="flex justify-between items-center mt-6 border-t border-slate-900/60 pt-4">
+                      <div className="flex justify-between items-center border-t border-slate-900/80 pt-3">
                         <div className="flex gap-2">
                           <button 
                             onClick={prevFlashcard} 
                             disabled={cardIndex === 0} 
-                            className="px-4 py-2 bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs font-semibold disabled:opacity-30 disabled:pointer-events-none transition-all"
+                            className="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all shadow"
                           >
                             Previous
                           </button>
                           <button 
                             onClick={nextFlashcard} 
                             disabled={cardIndex === cards.length - 1} 
-                            className="px-4 py-2 bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs font-semibold disabled:opacity-30 disabled:pointer-events-none transition-all"
+                            className="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all shadow"
                           >
                             Next Card
                           </button>
                         </div>
                         <button 
                           onClick={() => { clearSessions(); setActiveView('final_exam'); }} 
-                          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                          className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-950/40 transition-all flex items-center gap-1.5"
                           disabled={finalExams.length === 0}
                         >
                           Skip to Exam
@@ -755,7 +893,7 @@ export default function App() {
                     </>
                   ) : (
                     <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs py-10">
-                      <BookOpen className="w-8 h-8 mb-2 opacity-30" />
+                      <BookOpen className="w-8 h-8 mb-2 opacity-30 text-purple-400" />
                       No study guides loaded for this tier.
                     </div>
                   )}
@@ -977,9 +1115,10 @@ export default function App() {
                                                                                     'Level 1: Deep Walkthrough'}
                                   </span>
                                 </div>
-                                <div className="text-slate-300 leading-relaxed font-normal text-[11px] select-text whitespace-pre-wrap select-all font-sans">
-                                  {examReport.remediation_hint}
-                                </div>
+                                <HintMarkdown
+                                  text={examReport.remediation_hint}
+                                  className="text-slate-300 font-normal text-[11px] select-text"
+                                />
                               </div>
                             )}
 
@@ -1025,61 +1164,6 @@ export default function App() {
 
         {/* RIGHT METRIC & GRAPH TELEMETRY COLUMN */}
         <div className="lg:col-span-3 space-y-6">
-          
-          {/* LANGGRAPH STATE TELEMETRY VISUALIZATION */}
-          <div className="glass-panel rounded-2xl p-4 shadow-xl border border-slate-900">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-1.5">
-              <Network className="w-4 h-4 text-blue-400 animate-pulse" /> 
-              LangGraph Routing Telemetry
-            </h2>
-            
-            <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-900/80 flex flex-col gap-2 font-mono text-[10px] relative overflow-hidden">
-              
-              {/* NODE 1: RETRIEVER */}
-              <div className={`p-2 rounded-lg border flex justify-between items-center transition-all duration-300 ${
-                telemetry.activeNode.includes('Retriever') || telemetry.activeNode.includes('Context')
-                  ? 'bg-purple-950/40 border-purple-500/60 text-purple-300 scale-[1.02] shadow-lg shadow-purple-950/20 pulse-active' 
-                  : 'border-slate-900/60 text-slate-600'
-              }`}>
-                <span>1. ChromaDB RAG Vector</span> 
-                <Database className="w-3.5 h-3.5" />
-              </div>
-
-              <div className="text-center text-slate-700">↓</div>
-
-              {/* NODE 2: ANALYZER */}
-              <div className={`p-2 rounded-lg border flex justify-between items-center transition-all duration-300 ${
-                telemetry.activeNode.includes('Analyzer') || telemetry.activeNode.includes('Performance')
-                  ? 'bg-blue-950/40 border-blue-500/60 text-blue-300 scale-[1.02] shadow-lg shadow-blue-950/20 pulse-active' 
-                  : 'border-slate-900/60 text-slate-600'
-              }`}>
-                <span>2. Cognitive Load Analyzer</span> 
-                <Activity className="w-3.5 h-3.5" />
-              </div>
-
-              <div className="text-center text-slate-700">↓</div>
-
-              {/* BRANCH SELECTOR */}
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <div className={`p-2 rounded-lg border text-[9px] text-center transition-all duration-300 ${
-                  telemetry.activeNode.includes('Socratic') || (telemetry.activeNode !== 'Idle' && !telemetry.remedialPathActive && !telemetry.activeNode.includes('Context') && !telemetry.activeNode.includes('Analyzer') && !telemetry.activeNode.includes('Direct') && !telemetry.activeNode.includes('Diagnostic'))
-                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300 font-bold scale-[1.02] shadow-lg shadow-emerald-950/40 pulse-active' 
-                    : 'border-slate-900/60 text-slate-700 opacity-40'
-                }`}>
-                  Socratic Hint<br/>(Errors &lt; 2)
-                </div>
-                
-                <div className={`p-2 rounded-lg border text-[9px] text-center transition-all duration-300 ${
-                  telemetry.remedialPathActive || telemetry.activeNode.includes('Direct') || telemetry.activeNode.includes('Explainer')
-                    ? 'bg-amber-950/40 border-amber-500/60 text-amber-300 font-bold scale-[1.02] shadow-lg shadow-amber-950/40 pulse-active' 
-                    : 'border-slate-900/60 text-slate-700 opacity-40'
-                }`}>
-                  Direct Explainer<br/>(Errors &ge; 2)
-                </div>
-              </div>
-
-            </div>
-          </div>
 
           {/* BOUNDED RAG CONTEXT TERMINAL */}
           <div className="glass-panel rounded-2xl p-4 shadow-xl border border-slate-900 flex flex-col min-h-[160px]">
@@ -1156,9 +1240,9 @@ export default function App() {
                 {/* Gemini-Generated Hint Body */}
                 <div className="border-t border-amber-900/20 pt-2">
                   <div className="text-[8px] font-mono tracking-wider text-amber-500 font-bold uppercase mb-1">
-                    {currentDegreeOfFailure >= 60 ? 'Direct Formula Delivery' : 'Socratic Nudge'}
+                    {currentDegreeOfFailure >= 60 ? 'Conceptual Walkthrough' : 'Socratic Nudge'}
                   </div>
-                  <p className="text-slate-300 leading-relaxed font-normal text-[11px]">{serverEvaluatedHint}</p>
+                  <HintMarkdown text={serverEvaluatedHint} className="text-slate-300 font-normal text-[11px]" />
                 </div>
               </div>
             )}
