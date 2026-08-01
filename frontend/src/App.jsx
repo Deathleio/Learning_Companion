@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LandingPage from './components/LandingPage';
 import { 
   BookOpen, 
   HelpCircle, 
@@ -279,6 +280,7 @@ const FALLBACK_CURRICULUM = {
 };
 
 export default function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [activeSubject, setActiveSubject] = useState('Physics');
   const [activeTier, setActiveTier] = useState('Class 10');
   const [activeView, setActiveView] = useState('theory'); 
@@ -675,6 +677,22 @@ export default function App() {
   };
 
   const activeColor = getSubjectColor(activeSubject);
+
+  if (showLanding) {
+    return (
+      <LandingPage 
+        onSignUp={() => setShowLanding(false)} 
+        onNavigateSubject={(subject) => {
+          setActiveSubject(subject);
+          setShowLanding(false);
+        }}
+        onNavigateTier={(tier) => {
+          setActiveTier(tier);
+          setShowLanding(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased overflow-x-hidden selection:bg-blue-500 selection:text-white">
