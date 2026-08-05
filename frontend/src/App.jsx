@@ -690,6 +690,11 @@ export default function App() {
           setActiveTier(tier);
           setShowLanding(false);
         }}
+        onStartLearning={(subject, tier) => {
+          setActiveSubject(subject);
+          setActiveTier(tier);
+          setShowLanding(false);
+        }}
       />
     );
   }
