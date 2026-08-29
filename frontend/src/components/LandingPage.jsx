@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Reveal from './Reveal';
 import { 
   BrainCircuit, 
   ChevronRight, 
+  ChevronLeft,
   ArrowRight, 
   Zap, 
   Sparkles,
@@ -24,11 +25,32 @@ import {
   Check
 } from 'lucide-react';
 
+import heroImage from '../assets/heroImage.png';
+import gallery1 from '../assets/gallery1.png';
+import gallery2 from '../assets/gallery2.png';
+import gallery3 from '../assets/gallery3.png';
+import gallery4 from '../assets/gallery4.png';
+import gallery5 from '../assets/gallery5.png';
+
 export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTier, onStartLearning }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectionModalOpen, setSelectionModalOpen] = useState(false);
   const [pendingSelections, setPendingSelections] = useState({ subject: null, tier: null });
   const [modalError, setModalError] = useState('');
+  const [galleryIndex, setGalleryIndex] = useState(null); // null = lightbox closed
+
+  const galleryImages = [
+    { src: gallery1, alt: 'Learning experience preview' },
+    { src: gallery2, alt: 'Gallery preview 2' },
+    { src: gallery3, alt: 'Gallery preview 3' },
+    { src: gallery4, alt: 'Gallery preview 4' },
+    { src: gallery5, alt: 'Gallery preview 5' }
+  ];
+
+  const openGallery = (index) => setGalleryIndex(index);
+  const closeGallery = () => setGalleryIndex(null);
+  const prevImage = () => setGalleryIndex(prev => (prev === null ? prev : (prev - 1 + galleryImages.length) % galleryImages.length));
+  const nextImage = () => setGalleryIndex(prev => (prev === null ? prev : (prev + 1) % galleryImages.length));
 
   // Opens the "choose your class" modal for a subject card
   const handleExploreCourse = (subject) => {
@@ -74,6 +96,22 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
     }
     setIsMenuOpen(false);
   };
+
+  // Keyboard navigation for the gallery lightbox
+  useEffect(() => {
+    if (galleryIndex === null) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeGallery();
+      else if (e.key === 'ArrowLeft') prevImage();
+      else if (e.key === 'ArrowRight') nextImage();
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden'; // prevent background scroll
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [galleryIndex]);
 
   const subjects = [
     { icon: Atom, title: "Physics", desc: "Master the laws of nature from classical mechanics to quantum formulations with interactive RAG-powered modules." },
@@ -174,7 +212,7 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
           <Reveal direction="left" delay={150}>
             <div className="glass-panel aspect-video rounded-3xl border border-slate-800 flex items-center justify-center bg-slate-900/40 relative group overflow-hidden">
                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-glow-pulse"></div>
-               <Layout className="w-20 h-20 text-slate-700 group-hover:text-blue-400 transition-colors duration-500 animate-breathe" />
+               <img src={heroImage} alt="Aura cognitive learning companion hero illustration" className="w-full h-full object-cover" />
             </div>
           </Reveal>
         </section>
@@ -219,18 +257,37 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
           </Reveal>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[400px] md:h-[600px]">
             <Reveal direction="right" delay={100} className="h-full">
-              <div className="glass-panel rounded-3xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-full">
+              <button
+                type="button"
+                onClick={() => openGallery(0)}
+                className="glass-panel rounded-3xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-full w-full cursor-pointer text-left"
+              >
                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity animate-glow-pulse"></div>
-                 <Layout className="w-16 h-16 text-slate-700 group-hover:text-blue-500 transition-colors animate-breathe" />
-              </div>
+                 <img src={gallery1} alt="Learning experience preview" className="w-full h-full object-cover" />
+                 {/* Click-to-view overlay on gallery1 */}
+                 <div className="absolute inset-0 flex items-end justify-center pointer-events-none bg-gradient-to-t from-black/70 via-black/10 to-transparent p-5">
+                   <span className="text-sm md:text-base font-semibold text-white bg-slate-900/70 backdrop-blur-sm border border-white/20 px-4 py-2 rounded-full flex items-center gap-2">
+                     <Layout className="w-4 h-4" /> Click to View Image
+                   </span>
+                 </div>
+              </button>
             </Reveal>
             <div className="grid grid-cols-2 grid-rows-2 gap-6">
-              {[1, 2, 3, 4].map(i => (
+              {galleryImages.slice(1).map((g, i) => (
                 <Reveal key={i} direction="scale" delay={150 + i * 60} className="h-full">
-                  <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-full">
+                  <button
+                    type="button"
+                    onClick={() => openGallery(i + 1)}
+                    className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-full w-full cursor-pointer text-left"
+                  >
                     <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <Layout className="w-8 h-8 text-slate-700 group-hover:text-purple-500 transition-colors" />
-                  </div>
+                    <img src={g.src} alt={g.alt} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-black/30">
+                      <span className="text-xs font-semibold text-white bg-slate-900/70 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-full">
+                        View Image
+                      </span>
+                    </div>
+                  </button>
                 </Reveal>
               ))}
             </div>
@@ -437,6 +494,62 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
               Launch Dashboard <ArrowRight className="w-4 h-4" />
             </button>
           </div>
+        </div>
+      )}
+{/* IMAGE CAROUSEL LIGHTBOX */}
+      {galleryIndex !== null && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm animate-fadeIn"
+          onClick={closeGallery}
+        >
+          <button
+            type="button"
+            onClick={closeGallery}
+            aria-label="Close carousel"
+            className="absolute top-5 right-5 p-2.5 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors z-20"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Prev arrow */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); prevImage(); }}
+            aria-label="Previous image"
+            className="absolute left-3 md:left-8 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 border border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white transition-all z-20 shadow-lg"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          {/* Current image */}
+          <div
+            className="max-w-[90vw] max-h-[85vh] w-full mx-auto px-14 md:px-20 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={galleryImages[galleryIndex].src}
+              alt={galleryImages[galleryIndex].alt}
+              className="w-full h-full max-h-[85vh] object-contain rounded-xl"
+            />
+            <div className="flex items-center justify-between gap-4 mt-4">
+              <span className="text-xs font-mono text-slate-400 bg-slate-900/70 border border-slate-700/70 px-3 py-1 rounded-full">
+                {galleryIndex + 1} / {galleryImages.length}
+              </span>
+              <span className="text-sm text-slate-200 bg-slate-900/70 border border-slate-700/70 px-4 py-1.5 rounded-full truncate max-w-[60%]">
+                {galleryImages[galleryIndex].alt}
+              </span>
+            </div>
+          </div>
+
+          {/* Next arrow */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); nextImage(); }}
+            aria-label="Next image"
+            className="absolute right-3 md:right-8 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-900/80 border border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white transition-all z-20 shadow-lg"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
         </div>
       )}
     </div>
