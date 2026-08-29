@@ -255,12 +255,12 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
           <Reveal direction="up">
             <h3 className="text-3xl font-bold text-white text-center">Visual Learning Journey</h3>
           </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[400px] md:h-[600px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:h-[600px]">
             <Reveal direction="right" delay={100} className="h-full">
               <button
                 type="button"
                 onClick={() => openGallery(0)}
-                className="glass-panel rounded-3xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-full w-full cursor-pointer text-left"
+                className="glass-panel rounded-3xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-72 md:h-full w-full cursor-pointer text-left"
               >
                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity animate-glow-pulse"></div>
                  <img src={gallery1} alt="Learning experience preview" className="w-full h-full object-cover" />
@@ -278,7 +278,7 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
                   <button
                     type="button"
                     onClick={() => openGallery(i + 1)}
-                    className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-full w-full cursor-pointer text-left"
+                    className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/40 flex items-center justify-center relative group overflow-hidden h-44 md:h-full w-full cursor-pointer text-left"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     <img src={g.src} alt={g.alt} className="w-full h-full object-cover" />
