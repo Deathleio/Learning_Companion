@@ -18,7 +18,9 @@ import {
   Sparkles,
   Bookmark,
   MessageSquare,
-  Send
+  Send,
+  Menu,
+  X
 } from 'lucide-react';
 
 /** Lightweight markdown renderer for tutor hints (headers, bullets, bold). */
@@ -284,6 +286,7 @@ export default function App() {
   const [activeSubject, setActiveSubject] = useState('Physics');
   const [activeTier, setActiveTier] = useState('Class 10');
   const [activeView, setActiveView] = useState('theory'); 
+  const [mobileHeaderOpen, setMobileHeaderOpen] = useState(false); 
   
   // Curriculum States Loaded Dynamically from API
   const [cards, setCards] = useState([]);
@@ -690,6 +693,11 @@ export default function App() {
           setActiveTier(tier);
           setShowLanding(false);
         }}
+        onStartLearning={(subject, tier) => {
+          setActiveSubject(subject);
+          setActiveTier(tier);
+          setShowLanding(false);
+        }}
       />
     );
   }
@@ -701,18 +709,19 @@ export default function App() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-purple-500/5 blur-[120px] pointer-events-none"></div>
 
       {/* TOP HEADER */}
-      <header className="w-full glass-panel border-b border-slate-900 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-tr from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-950/20">
+      <header className="w-full glass-panel border-b border-slate-900 px-4 sm:px-6 py-4 flex items-center justify-between gap-3 sticky top-0 z-50">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="bg-gradient-to-tr from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-950/20 shrink-0">
             <BrainCircuit className="w-6 h-6 text-white" />
           </div>
-          <div>
-            <h1 className="text-md font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">AURA COGNITIVE COMPANION</h1>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Enterprise Educational System v2.1</p>
+          <div className="min-w-0">
+            <h1 className="text-sm md:text-md font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent whitespace-nowrap">AURA COGNITIVE COMPANION</h1>
+            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest hidden md:block">Enterprise Educational System v2.1</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Desktop / tablet controls */}
+        <div className="hidden md:flex items-center justify-end gap-4">
           <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800">
             {['Physics', 'Biology', 'Mathematics'].map(sub => (
               <button 
@@ -740,7 +749,58 @@ export default function App() {
             ))}
           </div>
         </div>
+
+        {/* Mobile hamburger button */}
+        <button
+          type="button"
+          onClick={() => setMobileHeaderOpen(o => !o)}
+          aria-label={mobileHeaderOpen ? 'Close menu' : 'Open menu'}
+          className="md:hidden p-2 rounded-xl border border-slate-800 bg-slate-900/60 text-slate-300 hover:text-white hover:border-slate-600 transition-colors shrink-0"
+        >
+          {mobileHeaderOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
       </header>
+
+      {/* MOBILE DROPDOWN MENU */}
+      {mobileHeaderOpen && (
+        <div className="md:hidden bg-slate-950/95 backdrop-blur-xl border-b border-slate-900 px-4 py-5 space-y-6 animate-fadeIn">
+          <div>
+            <h2 className="text-[10px] font-mono tracking-widest text-slate-500 uppercase px-2 mb-2 flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5" /> Subject
+            </h2>
+            <div className="grid grid-cols-3 gap-2">
+              {['Physics', 'Biology', 'Mathematics'].map(sub => (
+                <button 
+                  key={sub} 
+                  onClick={() => { setActiveSubject(sub); setMobileHeaderOpen(false); }} 
+                  className={`text-xs px-2 py-2.5 rounded-lg font-semibold transition-all ${activeSubject === sub ? 'bg-slate-800 text-white shadow-sm border border-slate-600' : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'}`}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-[10px] font-mono tracking-widest text-slate-500 uppercase px-2 mb-2 flex items-center gap-2">
+              <GraduationCap className="w-3.5 h-3.5" /> Class / Level
+            </h2>
+            <div className="space-y-2">
+              {['Class 10', 'Class 11-12', 'Undergraduate'].map(tier => (
+                <button 
+                  key={tier} 
+                  onClick={() => { setActiveTier(tier); setMobileHeaderOpen(false); }} 
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border ${activeTier === tier ? 'bg-slate-800 text-white border-slate-600' : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border-slate-800'}`}
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  {tier}
+                  {activeTier === tier && <span className="ml-auto text-[10px] text-emerald-400">Active</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DASHBOARD MAIN LAYOUT */}
       <div className="flex-1 max-w-[1600px] w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
