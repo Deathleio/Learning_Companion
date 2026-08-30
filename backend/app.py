@@ -127,59 +127,123 @@ def process_and_ingest_material(
 
     course_id = f"custom_{subject.lower()[:3]}_{uuid.uuid4().hex[:6]}"
     qge = QuestionGeneratorEngine()
-    # Cap chapters for performance on massive 1,000+ page books (max 8 comprehensive chapters)
-    if len(raw_chapters) > 8:
-        print(f"[Ingestion] Document has {len(raw_chapters)} raw sections. Slicing top 8 major curriculum units.")
-        raw_chapters = raw_chapters[:8]
-
     db_pipeline = DatabaseIngestPipeline()
+
+    # 1. Single-Pass Guiding Agent Blueprint (Ultra-low token usage: ~350 tokens for entire course)
+    raw_headings = [ch.get("title", "") for ch in raw_chapters]
+    guided_blueprint = qge.generate_guided_curriculum_blueprint(
+        course_title=title,
+        material_sample=clean_text,
+        subject=subject,
+        tier=academic_tier,
+        detected_headings=raw_headings
+    )
+
     processed_chapters = []
     all_cards = []
 
-    # 2. Process each chapter: Fast Theory & Flashcards Synthesis
-    for ch in raw_chapters:
-        ch_idx = ch.get("chapter_index", len(processed_chapters) + 1)
-        ch_title = ch.get("title", f"Chapter {ch_idx}")
-        ch_content = ch.get("content", "")
-        ch_id = f"ch_{ch_idx}"
+    if guided_blueprint and len(guided_blueprint) > 0:
+        print(f"[Ingestion] Applying guiding agent blueprint across {len(guided_blueprint)} chapters...")
+        for idx, g_ch in enumerate(guided_blueprint, 1):
+            ch_id = f"ch_{idx}"
+            ch_title = g_ch.get("title", f"Chapter {idx}")
+            ch_summary = g_ch.get("summary", "")
+            ch_objs = g_ch.get("objectives", [])
+            
+            # Map raw content slice if available
+            ch_content = raw_chapters[idx - 1].get("content", "") if idx - 1 < len(raw_chapters) else clean_text[:4000]
+            
+            # Format flashcards
+            ch_cards = []
+            for c_idx, c in enumerate(g_ch.get("cards", [])):
+                ch_cards.append({
+                    "id": f"c{idx}_{c_idx+1}_{uuid.uuid4().hex[:4]}",
+                    "topic": c.get("topic", ch_title),
+                    "question": c.get("question", f"Core principle in {ch_title}"),
+                    "answer": c.get("answer", "• Governing theoretical axiom and mechanics.")
+                })
+            all_cards.extend(ch_cards)
 
-        # Generate theory and flashcards (Gemini with local/heuristic fallback)
-        theory_data = qge.generate_chapter_theory_and_cards(
-            chapter_title=ch_title,
-            chapter_text=ch_content[:3000],
-            subject=subject,
-            tier=academic_tier,
-            chapter_index=ch_idx
-        )
+            # Deep theory suite from guiding agent
+            deep_theory = {
+                "principles": g_ch.get("principles", [{"title": "Primary Law", "content": ch_summary, "tag": "Core Axiom"}]),
+                "formulations": g_ch.get("formulations", [{"title": "Mathematical Model", "formula": f"Governing model for {ch_title}", "derivation": "Derived from foundational conservation laws.", "variables": "State properties and constants."}]),
+                "mental_models": g_ch.get("mental_models", [{"concept": "Intuitive Model", "analogy": f"System dynamic representing {ch_title}.", "takeaway": "Focus on state invariants."}]),
+                "applications": g_ch.get("applications", [{"domain": f"Applied {subject}", "description": f"Deploys theoretical principles of {ch_title}."}]),
+                "misconceptions": g_ch.get("misconceptions", [{"trap": "Formula misapplication", "correction": "Verify operational assumptions prior to calculation."}])
+            }
 
-        ch_cards = theory_data.get("cards", [])
-        all_cards.extend(ch_cards)
+            # Vectorize chunks into ChromaDB with SHA-256 deduplication
+            chunks = MaterialParser.create_semantic_chunks(ch_content[:8000], chunk_size=400, overlap=40)[:15]
+            try:
+                db_pipeline.ingest_custom_chunks(
+                    course_id=course_id,
+                    chunks=chunks,
+                    subject=subject,
+                    academic_tier=academic_tier,
+                    chapter_id=ch_id,
+                    chapter_index=idx
+                )
+            except Exception as ve:
+                print(f"[ChromaDB] Vector ingestion warning: {ve}")
 
-        # Create semantic chunks & vectorize to ChromaDB (capped at 15 chunks per chapter for speed)
-        chunks = MaterialParser.create_semantic_chunks(ch_content[:8000], chunk_size=400, overlap=40)[:15]
-        try:
-            db_pipeline.ingest_custom_chunks(
-                course_id=course_id,
-                chunks=chunks,
+            processed_chapters.append({
+                "chapter_id": ch_id,
+                "chapter_index": idx,
+                "title": ch_title,
+                "summary": ch_summary,
+                "objectives": ch_objs,
+                "cards": ch_cards,
+                "deep_theory": deep_theory,
+                "full_text": ch_content,
+                "content_preview": ch_content[:400] + "..." if len(ch_content) > 400 else ch_content
+            })
+    else:
+        # Fallback: Local offline extraction
+        if len(raw_chapters) > 8:
+            raw_chapters = raw_chapters[:8]
+
+        for ch in raw_chapters:
+            ch_idx = ch.get("chapter_index", len(processed_chapters) + 1)
+            ch_title = ch.get("title", f"Chapter {ch_idx}")
+            ch_content = ch.get("content", "")
+            ch_id = f"ch_{ch_idx}"
+
+            theory_data = qge.generate_chapter_theory_and_cards(
+                chapter_title=ch_title,
+                chapter_text=ch_content[:3000],
                 subject=subject,
-                academic_tier=academic_tier,
-                chapter_id=ch_id,
+                tier=academic_tier,
                 chapter_index=ch_idx
             )
-        except Exception as ve:
-            print(f"[ChromaDB] Vector ingestion warning: {ve}")
 
-        processed_chapters.append({
-            "chapter_id": ch_id,
-            "chapter_index": ch_idx,
-            "title": ch_title,
-            "summary": theory_data.get("summary", ""),
-            "objectives": theory_data.get("objectives", []),
-            "cards": ch_cards,
-            "deep_theory": theory_data.get("deep_theory", {}),
-            "full_text": ch_content,
-            "content_preview": ch_content[:400] + "..." if len(ch_content) > 400 else ch_content
-        })
+            ch_cards = theory_data.get("cards", [])
+            all_cards.extend(ch_cards)
+
+            chunks = MaterialParser.create_semantic_chunks(ch_content[:8000], chunk_size=400, overlap=40)[:15]
+            try:
+                db_pipeline.ingest_custom_chunks(
+                    course_id=course_id,
+                    chunks=chunks,
+                    subject=subject,
+                    academic_tier=academic_tier,
+                    chapter_id=ch_id,
+                    chapter_index=ch_idx
+                )
+            except Exception as ve:
+                print(f"[ChromaDB] Vector ingestion warning: {ve}")
+
+            processed_chapters.append({
+                "chapter_id": ch_id,
+                "chapter_index": ch_idx,
+                "title": ch_title,
+                "summary": theory_data.get("summary", ""),
+                "objectives": theory_data.get("objectives", []),
+                "cards": ch_cards,
+                "deep_theory": theory_data.get("deep_theory", {}),
+                "full_text": ch_content,
+                "content_preview": ch_content[:400] + "..." if len(ch_content) > 400 else ch_content
+            })
 
     # 3. Generate Assessment Items (Practice Quizzes + Threshold Final Exam)
     assessment = qge.generate_assessment_items(
