@@ -61,23 +61,33 @@ def analyze_depth_and_mamdani_node(state: AgentState):
     has_direct_request = any(k in latest_msg for k in surrender_keywords)
     has_failed_multiple = errors >= 1 or latency > 90
 
-    # Calculate base accuracy input for Mamdani System
+    # Calculate base accuracy and error severity input for Mamdani System
     if has_direct_request or has_failed_multiple:
         base_accuracy = 20.0
+        error_severity = 0.85
     else:
         word_count = len(latest_msg.split())
         deep_keywords = ["why", "how", "formula", "derive", "explain", "proof", "mechanism", "vector", "step by step"]
         if word_count >= 8 or any(k in latest_msg for k in deep_keywords):
             base_accuracy = 90.0
+            error_severity = 0.1
         else:
             base_accuracy = 70.0
+            error_severity = 0.35
+
+    attempts_count = max(1, errors + 1)
 
     # Run Mamdani Fuzzy Inference Engine for internal routing tuning
-    eval_result = FuzzyMarkingSystem.evaluate_performance(base_accuracy, latency)
+    eval_result = FuzzyMarkingSystem.evaluate_performance(
+        accuracy_pct=base_accuracy,
+        latency_seconds=latency,
+        attempts_count=attempts_count,
+        error_severity=error_severity
+    )
     fuzzy_score = eval_result["fuzzy_score"]
     performance_tier = eval_result["performance_tier"]
     linguistic_remark = eval_result["linguistic_remark"]
-    degree_of_failure = round(100.0 - fuzzy_score, 1)
+    degree_of_failure = eval_result["degree_of_failure"]
 
     # Determine node routing
     if has_direct_request or has_failed_multiple or degree_of_failure >= 50.0 or performance_tier == "Intervention Required":

@@ -61,6 +61,7 @@ class ShortAnswerPayload(BaseModel):
     course_id: Optional[str] = None
     hint_formula: str = ""
     hint_misconception: str = ""
+    hints_requested: int = 0
 
 class ExamSubmissionPayload(BaseModel):
     correct_answers: int = 0
@@ -499,26 +500,7 @@ async def run_session_cycle(payload: ChatSessionPayload):
 @app.post("/api/tutor/evaluate-short-answer")
 async def evaluate_short_answer(payload: ShortAnswerPayload):
     """
-    3-Stage Pipeline for Mamdani-driven adaptive hint generation.
-
-    Stage 1 — Gemini Diagnostic Grader
-        Scores the answer AND produces a precise gap_analysis string that
-        identifies exactly what was wrong in the student's specific response
-        (wrong formula, wrong unit, wrong sign, missing step, etc.).
-
-    Stage 2 — Mamdani Fuzzy Inference System
-        Takes (accuracy_pct, seconds_spent) → fuzzy_score, performance_tier,
-        linguistic_remark, degree_of_failure.
-
-    Stage 3 — Mamdani-Calibrated Gemini Hint
-        The hint type is entirely determined by the Mamdani output:
-          degree_of_failure >= 60  →  "Intervention Required" tier
-                                       Gemini delivers the full formula walkthrough,
-                                       anchored to the gap_analysis.
-          degree_of_failure <  60  →  "Developing" tier
-                                       Gemini delivers a Socratic nudge that
-                                       targets ONLY the specific gap identified.
-    This guarantees every hint is about the student's actual mistake, not generic.
+    3-Stage Pipeline for Multi-Parameter Mamdani-driven adaptive hint generation.
     """
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -527,9 +509,7 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
     model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, google_api_key=api_key)
 
     # ══════════════════════════════════════════════════════════════════════════════
-    # STAGE 1 — Combined Grading + Specific Gap Diagnosis
-    # We ask Gemini to simultaneously score and diagnose the exact error so that
-    # the hint is always anchored to what the student actually got wrong.
+    # STAGE 1 — Combined Grading + Error Severity + Specific Gap Diagnosis
     # ══════════════════════════════════════════════════════════════════════════════
     diagnostic_prompt = (
         "You are a precise academic grading diagnostic engine.\n\n"
@@ -537,30 +517,46 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
         f"QUESTION: {payload.question_text}\n"
         f"EXPECTED ANSWER: {payload.expected_answer}\n"
         f"STUDENT SUBMITTED: {payload.student_raw_input}\n\n"
-        "Your job is TWO things:\n"
-        "  A) Score the student's answer with partial credit (accept unit variants, rounding ±5%, white-space).\n"
-        "  B) Write a 1-2 sentence gap_analysis that describes the SPECIFIC error in the student's\n"
+        "Your job is THREE things:\n"
+        "  A) Score the student's answer with partial credit (accept unit variants, rounding ±5%, whitespace, case differences).\n"
+        "  B) Estimate error_severity from 0.0 to 1.0:\n"
+        "     - 0.0 to 0.2: Minor typo, sign swap, or rounding approximation.\n"
+        "     - 0.3 to 0.6: Procedural/algebraic error, wrong intermediate step, or related distractor.\n"
+        "     - 0.7 to 1.0: Complete conceptual misunderstanding, invalid formula, or unrelated answer.\n"
+        "  C) Write a 1-2 sentence gap_analysis that describes the SPECIFIC error in the student's\n"
         "     submission. Be precise: name the wrong value, missing concept, incorrect unit, wrong sign,\n"
         "     or missing step. Do NOT be generic ('the answer is wrong'). Reference the student's actual words.\n"
         "     CRITICAL: Never reveal the correct answer, expected value, or final numerical result.\n\n"
         "Respond ONLY with a minified JSON object — no markdown, no explanation:\n"
         '{"accuracy_percentage": <float 0.0-100.0>, "is_logically_correct": <true|false>, '
+        '"error_severity": <float 0.0-1.0>, '
         '"gap_analysis": "<1-2 sentence diagnosis of the exact error in the student\'s answer>"}'
     )
     gap_analysis = "No specific error analysis available."
+    error_severity = 0.0
     try:
         diag_res   = model.invoke([HumanMessage(content=diagnostic_prompt)])
         clean_json = diag_res.content.replace("```json", "").replace("```", "").strip()
         diag_data  = json.loads(clean_json)
         base_accuracy = float(diag_data.get("accuracy_percentage", 0.0))
         is_correct    = bool(diag_data.get("is_logically_correct", False))
+        if is_correct:
+            base_accuracy = max(base_accuracy, 95.0)
+            error_severity = 0.0
+        else:
+            error_severity = float(diag_data.get("error_severity", 0.7))
         gap_analysis  = sanitize_gap_analysis(
             str(diag_data.get("gap_analysis", gap_analysis)).strip(),
             payload.expected_answer,
         )
-    except Exception:
-        is_correct    = payload.student_raw_input.strip().lower() == payload.expected_answer.strip().lower()
+    except Exception as e:
+        print("DIAGNOSTIC ENGINE LOG/FALLBACK:", e)
+        # Normalize student raw input and expected answer for math & text comparisons
+        norm_student = payload.student_raw_input.strip().lower().replace(" ", "").replace("x=", "").replace("ans=", "").replace("answer=", "")
+        norm_expected = payload.expected_answer.strip().lower().replace(" ", "").replace("x=", "")
+        is_correct = (norm_student == norm_expected) or (payload.student_raw_input.strip().lower() == payload.expected_answer.strip().lower())
         base_accuracy = 100.0 if is_correct else 0.0
+        error_severity = 0.0 if is_correct else 0.8
         gap_analysis  = sanitize_gap_analysis(
             f"The student wrote '{payload.student_raw_input}', but the approach or result "
             f"does not yet satisfy the problem requirements. Review the governing relationship "
@@ -569,27 +565,25 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
         )
 
     # ══════════════════════════════════════════════════════════════════════════════
-    # STAGE 2 — Attempt Penalty + Mamdani Fuzzy Inference
+    # STAGE 2 — Multi-Parameter Mamdani Fuzzy Inference
     # ══════════════════════════════════════════════════════════════════════════════
-    if is_correct and payload.attempts_count > 1:
-        accuracy_pct = max(50.0, base_accuracy - ((payload.attempts_count - 1) * 15.0))
-    else:
-        accuracy_pct = base_accuracy
-
-    evaluation        = FuzzyMarkingSystem.evaluate_performance(accuracy_pct, payload.seconds_spent)
+    evaluation = FuzzyMarkingSystem.evaluate_performance(
+        accuracy_pct=base_accuracy,
+        latency_seconds=payload.seconds_spent,
+        attempts_count=payload.attempts_count,
+        error_severity=error_severity,
+        hints_requested=getattr(payload, "hints_requested", 0)
+    )
     fuzzy_score       = evaluation["fuzzy_score"]
     performance_tier  = evaluation["performance_tier"]
     linguistic_remark = evaluation["linguistic_remark"]
-    degree_of_failure = round(100.0 - fuzzy_score, 1)
+    degree_of_failure = evaluation["degree_of_failure"]
 
     # ══════════════════════════════════════════════════════════════════════════════
     # STAGE 3 — Mamdani-Calibrated Gemini Hint
-    # The gap_analysis from Stage 1 is the ANCHOR of every hint prompt.
-    # Mamdani tier decides depth: full walkthrough vs. Socratic nudge.
     # ══════════════════════════════════════════════════════════════════════════════
     hint_response = ""
     if not is_correct:
-        # Common context block injected into every hint prompt
         shared_context = (
             f"SUBJECT: {payload.current_subject} | LEVEL: {payload.current_tier}\n"
             f"QUESTION: {payload.question_text}\n"
@@ -598,6 +592,7 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
             f"  Performance Tier   : {performance_tier}\n"
             f"  Fuzzy Score        : {fuzzy_score}%\n"
             f"  Degree of Failure  : {degree_of_failure}%\n"
+            f"  Error Severity     : {error_severity:.2f} (0=minor slip, 1=critical flaw)\n"
             f"  Linguistic Verdict : {linguistic_remark}\n\n"
             f"SPECIFIC ERROR IN STUDENT'S ANSWER (from diagnostic engine):\n"
             f"  {gap_analysis}\n\n"
@@ -605,7 +600,7 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
             f"  {payload.hint_formula or 'derive from question parameters'}\n\n"
         )
 
-        if degree_of_failure >= 60.0:
+        if degree_of_failure >= 60.0 or error_severity >= 0.7:
             # ── INTERVENTION REQUIRED: Structured conceptual walkthrough ─────
             hint_prompt = (
                 "You are an academic remediation tutor. The Mamdani Fuzzy System has classified "
@@ -674,26 +669,34 @@ async def evaluate_short_answer(payload: ShortAnswerPayload):
         "performance_tier":  performance_tier,
         "linguistic_remark": linguistic_remark,
         "gap_analysis":      gap_analysis,
+        "error_severity":    error_severity,
         "assigned_hint":     hint_response
     }
 
 @app.post("/api/tutor/evaluate-exam")
 async def evaluate_final_exam(payload: ExamSubmissionPayload):
-    # Determine accuracy and latency based on detailed metrics or basic parameters
     if payload.question_details:
         total_qs = len(payload.question_details)
         correct_qs = sum(1 for q in payload.question_details if q.get("is_correct", False))
-        # Compute overall exam accuracy as the average of individual questions' fuzzy scores
         accuracy = sum(q.get("fuzzy_score", 0.0) for q in payload.question_details) / max(1, total_qs)
         total_time = sum(q.get("latency_seconds", 0) for q in payload.question_details)
         average_latency = total_time / max(1, total_qs)
+        avg_attempts = sum(q.get("attempts", 1) for q in payload.question_details) / max(1, total_qs)
+        avg_severity = sum(q.get("error_severity", 0.0) for q in payload.question_details) / max(1, total_qs)
     else:
         total_qs = max(1, payload.total_questions)
         correct_qs = payload.correct_answers
         accuracy = (correct_qs / total_qs) * 100
         average_latency = payload.total_elapsed_time / total_qs
+        avg_attempts = 1.0
+        avg_severity = 0.0 if accuracy >= 80.0 else 0.6
 
-    assessment = FuzzyMarkingSystem.evaluate_performance(accuracy, int(average_latency))
+    assessment = FuzzyMarkingSystem.evaluate_performance(
+        accuracy_pct=accuracy,
+        latency_seconds=int(average_latency),
+        attempts_count=int(round(avg_attempts)),
+        error_severity=avg_severity
+    )
     analytics = PathPerformanceAnalytics.calculate_pathway_improvement(
         mock_history=payload.mock_chat_history,
         exam_score=assessment["fuzzy_score"],
