@@ -287,11 +287,19 @@ async def get_course_detail(course_id: str):
 
 @app.delete("/api/material/course/{course_id}")
 async def delete_custom_course(course_id: str):
-    """Deletes a custom user course."""
+    """Deletes a custom user course and cleans vector embeddings."""
     success = CourseManager.delete_custom_course(course_id)
     if not success:
         raise HTTPException(status_code=404, detail="Course not found or is a protected built-in course.")
-    return {"status": "success", "message": f"Course '{course_id}' deleted."}
+    
+    # Clean up associated vector embeddings to keep ChromaDB storage lean
+    try:
+        db_pipe = DatabaseIngestPipeline()
+        db_pipe.delete_course_vectors(course_id)
+    except Exception as e:
+        print(f"[Course Cleanup] Warning deleting vector chunks: {e}")
+
+    return {"status": "success", "message": f"Course '{course_id}' and associated vector embeddings deleted."}
 
 
 # --- BACKEND ENDPOINT ROUTERS ---

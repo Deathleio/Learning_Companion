@@ -117,8 +117,8 @@ class MaterialParser:
     def detect_outline_or_chapters(text: str) -> List[Dict[str, Any]]:
         """
         Attempts to detect logical chapters/sections in text using headings or regex patterns.
-        Filters out Front-Matter (Preface, TOC) and Back-Matter (Appendixes, Solutions, Index, Bibliography)
-        to isolate 100% pure core instructional theory across massive books.
+        Filters out Table of Contents (TOC) listings, Front-Matter (Preface), and Back-Matter (Appendixes, Solutions, Index, Bibliography)
+        to isolate 100% pure, substantive core instructional theory.
         """
         cleaned = MaterialParser.clean_text(text)
         
@@ -136,6 +136,11 @@ class MaterialParser:
                 title_prefix = match.group(1).strip()
                 title_text = match.group(2).strip()
                 full_title = f"{title_prefix} {title_text}".strip().lstrip("#").strip()
+                
+                # Sanitize title: strip trailing page numbers (e.g., '1.4 Technology for Data Science 28' -> '1.4 Technology for Data Science')
+                full_title = re.sub(r"\.{2,}\s*\d*", "", full_title)
+                full_title = re.sub(r"\s+\d{1,4}$", "", full_title).strip()
+                
                 if len(full_title) < 4:
                     continue
                 
@@ -143,7 +148,21 @@ class MaterialParser:
                 end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned)
                 content = cleaned[start_pos:end_pos].strip()
                 
-                if len(content) > 60:
+                # Filter out Table of Contents lines:
+                # TOC lines are characterized by short snippets (< 250 chars) packed with page numbers or key terms/review headers
+                is_toc_snippet = (
+                    len(content) < 350 and (
+                        bool(re.search(r"\b(?:Key Terms|Group Project|Chapter Review|Quantitative Problems|Problems|Exercises)\s+\d+", content))
+                        or bool(re.search(r"\.{2,}\s*\d+", content))
+                        or bool(re.search(r"\b\d+\s+\b\d+\s+\b\d+", content))
+                    )
+                )
+                
+                if is_toc_snippet:
+                    continue
+                
+                # Only accept sections with substantive instructional body text (at least 300 characters)
+                if len(content) >= 300:
                     raw_sections.append({
                         "title": full_title,
                         "content": content
@@ -161,17 +180,29 @@ class MaterialParser:
                 "content": s["content"]
             })
                     
-        # If no explicit chapter structure detected or all were filtered, create logical structural slices
+        # If no explicit chapter structure detected or all were filtered (e.g. dense single narrative or unformatted book),
+        # slice the substantive body into comprehensive, rich curriculum chapters
         if not theory_chapters:
-            paragraphs = [p.strip() for p in cleaned.split("\n\n") if len(p.strip()) > 30]
+            # Discard initial TOC pages if detected
+            substantive_text = cleaned
+            toc_match = re.search(r"(?:Table\s+of\s+Contents|Contents)\b.*?(?=Chapter\s+1\b|Unit\s+1\b|1\.\s+Introduction\b|Introduction\b)", cleaned, re.DOTALL | re.IGNORECASE)
+            if toc_match:
+                substantive_text = cleaned[toc_match.end():].strip()
+
+            paragraphs = [p.strip() for p in substantive_text.split("\n\n") if len(p.strip()) > 80]
+            if not paragraphs:
+                paragraphs = [p.strip() for p in cleaned.split("\n\n") if len(p.strip()) > 30]
             if not paragraphs:
                 paragraphs = [cleaned]
                 
-            chunk_size = max(1, len(paragraphs) // 4) if len(paragraphs) > 4 else len(paragraphs)
+            chunk_size = max(1, len(paragraphs) // 5) if len(paragraphs) > 5 else len(paragraphs)
             slice_idx = 1
             for i in range(0, len(paragraphs), chunk_size):
                 chunk_slice = "\n\n".join(paragraphs[i:i + chunk_size])
+                if len(chunk_slice) < 200:
+                    continue
                 first_sentence = chunk_slice.split("\n")[0][:60].strip()
+                first_sentence = re.sub(r"[#\*\d\.\-:]+", " ", first_sentence).strip()
                 title = f"Chapter {slice_idx}: {first_sentence}" if len(first_sentence) > 10 else f"Chapter {slice_idx}: Key Concepts"
                 theory_chapters.append({
                     "chapter_index": slice_idx,
@@ -179,7 +210,7 @@ class MaterialParser:
                     "content": chunk_slice
                 })
                 slice_idx += 1
-                if slice_idx > 8:  # Cap at 8 chapters for fallback
+                if slice_idx > 8:  # Cap at 8 chapters
                     break
 
         return theory_chapters

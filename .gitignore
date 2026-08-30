@@ -20,6 +20,8 @@ frontend/dist/
 # Large dataset text or archive folders
 backend/data/ednet/KT1.zip
 backend/data/ednet/ednet_small_sample.csv
+backend/data/dialogue/teacher_student_corpus/*.json
+backend/data/courses/custom_*.json
 
 # System file logs
 *.log

@@ -83,35 +83,70 @@ class DatabaseIngestPipeline:
         chapter_id: str = "ch_1",
         chapter_index: int = 1,
     ):
-        """Ingests dynamically parsed chunks for a user-created custom course with full namespace metadata."""
+        """
+        Ingests dynamically parsed chunks with SHA-256 content deduplication to prevent vector DB bloat.
+        Uses deterministic content hashing to prevent duplicate vector caching.
+        """
+        import hashlib
         if not chunks:
             return 0
 
-        total = len(chunks)
-        ids = [f"{course_id}_{chapter_id}_{i:04d}" for i in range(total)]
-        metadatas = [
-            {
+        # Filter out empty or near-empty chunks
+        unique_chunks_map = {}
+        for c in chunks:
+            clean_c = c.strip()
+            if len(clean_c) > 40:
+                chunk_hash = hashlib.sha256(clean_c.encode('utf-8')).hexdigest()[:16]
+                if chunk_hash not in unique_chunks_map:
+                    unique_chunks_map[chunk_hash] = clean_c
+
+        if not unique_chunks_map:
+            return 0
+
+        ids = []
+        documents = []
+        metadatas = []
+
+        for chunk_hash, text in unique_chunks_map.items():
+            doc_id = f"{course_id}_{chapter_id}_{chunk_hash}"
+            ids.append(doc_id)
+            documents.append(text)
+            metadatas.append({
                 "course_id": course_id,
                 "chapter_id": chapter_id,
                 "chapter_index": chapter_index,
                 "subject": subject,
                 "academic_tier": academic_tier,
-                "grade_level": academic_tier,
+                "content_hash": chunk_hash,
                 "data_integrity_status": "verified"
-            }
-            for _ in range(total)
-        ]
+            })
 
-        batch_size = 500
-        for start_idx in range(0, total, batch_size):
+        batch_size = 200
+        for start_idx in range(0, len(ids), batch_size):
             end_idx = start_idx + batch_size
-            self.curriculum_collection.add(
-                ids=ids[start_idx:end_idx],
-                documents=chunks[start_idx:end_idx],
-                metadatas=metadatas[start_idx:end_idx],
-            )
+            try:
+                # Use upsert to avoid duplicate insertion errors
+                self.curriculum_collection.upsert(
+                    ids=ids[start_idx:end_idx],
+                    documents=documents[start_idx:end_idx],
+                    metadatas=metadatas[start_idx:end_idx],
+                )
+            except Exception as e:
+                print(f"[ChromaDB] Upsert warning: {e}")
 
-        return total
+        return len(ids)
+
+    def delete_course_vectors(self, course_id: str) -> int:
+        """Purges all vector embeddings associated with a deleted course to keep vector store lean."""
+        try:
+            self.curriculum_collection.delete(
+                where={"course_id": course_id}
+            )
+            print(f"[ChromaDB] Successfully purged vector records for course: {course_id}")
+            return 1
+        except Exception as e:
+            print(f"[ChromaDB] Error purging course vectors for {course_id}: {e}")
+            return 0
 
     def query_verified_context(self, query: str, course_id: str = None, subject: str = None, academic_tier: str = None, n_results: int = 3) -> list[str]:
         """Queries the local collection using verified structural parameters and optional course_id/subject filter."""

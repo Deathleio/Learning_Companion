@@ -432,7 +432,7 @@ export default function TheoryExplorer({
             <div className="flex flex-col items-center justify-center py-4">
               <div 
                 onClick={() => setIsFlipped(!isFlipped)} 
-                className="flip-card w-full max-w-3xl min-h-[380px] cursor-pointer group"
+                className="flip-card w-full max-w-3xl h-[400px] sm:h-[440px] cursor-pointer group"
               >
                 <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
                   
