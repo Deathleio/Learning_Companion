@@ -3,6 +3,7 @@ import LandingPage from './components/LandingPage';
 import MaterialIngestionModal from './components/MaterialIngestionModal';
 import CourseStudioView from './components/CourseStudioView';
 import ChapterNav from './components/ChapterNav';
+import TheoryExplorer from './components/TheoryExplorer';
 import { 
   BookOpen, 
   HelpCircle, 
@@ -1022,140 +1023,21 @@ export default function App() {
           />
         )}
 
-        {/* PAGE 2: STUDY DECK & FLASHCARDS */}
+        {/* PAGE 2: INTERACTIVE THEORY EXPLORER & DEEP READER */}
         {activeView === 'theory' && (
-          <div className="space-y-6 max-w-5xl mx-auto animate-fadeIn">
-            {/* CHAPTER NAVIGATION BAR */}
-            {chapters.length > 1 && (
-              <ChapterNav
-                chapters={chapters}
-                activeChapterIndex={activeChapterIndex}
-                onSelectChapter={(idx) => {
-                  setActiveChapterIndex(idx);
-                  setCardIndex(0);
-                  setIsFlipped(false);
-                }}
-                activeColor={activeSubject === 'Biology' ? 'emerald' : activeSubject === 'Mathematics' ? 'purple' : 'blue'}
-              />
-            )}
-
-            {/* Main Flashcard Card Deck */}
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
-              <div className="flex flex-wrap justify-between items-center pb-4 border-b border-slate-800/80 gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-purple-500/20 rounded-xl text-purple-400 border border-purple-500/30">
-                    <BookOpen className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">
-                      {activeChapterIndex !== null && chapters[activeChapterIndex] 
-                        ? `${chapters[activeChapterIndex].title} — Flashcards` 
-                        : `${activeCourseTitle || 'Core Course'} — Flashcard Deck`}
-                    </h3>
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      Card {displayedCards.length > 0 ? Math.min(cardIndex + 1, displayedCards.length) : 0} of {displayedCards.length}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={generateAiFlashcards}
-                    disabled={isGeneratingCards}
-                    className="bg-slate-900 border border-purple-500/30 hover:border-purple-500/60 text-purple-300 text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isGeneratingCards ? (
-                      <>
-                        <div className="w-3.5 h-3.5 rounded-full border-2 border-purple-400/30 border-t-purple-400 animate-spin" />
-                        <span>Regenerating RAG...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                        <span>Regenerate AI Cards</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setActiveView('quiz')}
-                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg shadow-emerald-950/40 transition flex items-center gap-1.5"
-                  >
-                    <span>Practice Lab</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 3D PERSPECTIVE FLIP CARD CONTAINER */}
-              {displayedCards.length > 0 ? (
-                <div className="flex flex-col items-center justify-center py-6">
-                  <div 
-                    onClick={() => setIsFlipped(!isFlipped)} 
-                    className="flip-card w-full max-w-[580px] h-[340px] cursor-pointer group"
-                  >
-                    <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
-                      
-                      {/* FRONT SIDE */}
-                      <div className="flip-card-front bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/40 border border-purple-900/40 hover:border-purple-500/60 p-8 flex flex-col justify-between items-center text-center shadow-2xl rounded-3xl relative overflow-hidden transition-all duration-300">
-                        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-inner">
-                          {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.topic}
-                        </span>
-                        <p className="text-lg font-semibold leading-relaxed text-slate-100 max-w-[460px]">
-                          {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.question}
-                        </p>
-                        <span className="text-xs text-purple-300/80 flex items-center gap-1.5 font-medium group-hover:text-purple-300 transition-colors">
-                          <Sparkles className="w-4 h-4 text-yellow-400 animate-bounce" />
-                          Click anywhere to Flip Card
-                        </span>
-                      </div>
-
-                      {/* BACK SIDE */}
-                      <div className="flip-card-back bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-900/50 p-8 flex flex-col justify-between items-start text-left shadow-2xl rounded-3xl overflow-y-auto custom-scrollbar relative">
-                        <div className="flex justify-between items-center w-full border-b border-indigo-900/40 pb-3">
-                          <span className="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
-                            <BookOpen className="w-4 h-4 text-indigo-400" />
-                            Theoretical Synthesis
-                          </span>
-                          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/40">
-                            {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.topic}
-                          </span>
-                        </div>
-                        <div className="flex-1 w-full my-4 text-xs sm:text-sm text-slate-200 font-mono leading-relaxed whitespace-pre-wrap">
-                          {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.answer}
-                        </div>
-                        <span className="text-xs text-indigo-300/70 font-medium">Click to flip back</span>
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Card Navigation Controls */}
-                  <div className="flex items-center justify-between w-full max-w-[580px] mt-6 pt-4 border-t border-slate-800/80">
-                    <button 
-                      onClick={prevFlashcard} 
-                      disabled={cardIndex === 0} 
-                      className="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all shadow"
-                    >
-                      ← Previous Card
-                    </button>
-                    <button 
-                      onClick={nextFlashcard} 
-                      disabled={cardIndex >= displayedCards.length - 1} 
-                      className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-xl text-xs font-bold text-white disabled:opacity-30 disabled:pointer-events-none transition-all shadow-lg shadow-purple-950/40"
-                    >
-                      Next Card →
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-16 text-center text-slate-500 text-xs">
-                  <BookOpen className="w-10 h-10 mb-2 opacity-30 text-purple-400 mx-auto" />
-                  No study flashcards available for this section.
-                </div>
-              )}
-            </div>
-          </div>
+          <TheoryExplorer
+            courseTitle={activeCourseTitle || 'Core Curriculum'}
+            chapters={chapters}
+            activeChapterIndex={activeChapterIndex}
+            onSelectChapter={(idx) => {
+              setActiveChapterIndex(idx);
+              setCardIndex(0);
+              setIsFlipped(false);
+            }}
+            onNavigateToPractice={() => setActiveView('quiz')}
+            cards={cards}
+            activeColor={activeSubject === 'Biology' ? 'emerald' : activeSubject === 'Mathematics' ? 'purple' : 'blue'}
+          />
         )}
 
         {/* PAGE 3: PRACTICE & SOCRATIC LAB */}

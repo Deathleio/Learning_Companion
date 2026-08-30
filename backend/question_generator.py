@@ -64,18 +64,21 @@ class QuestionGeneratorEngine:
         
         # Identify definition sentences and key formulas
         key_definitions = [s for s in sentences if any(k in s.lower() for k in ['is defined as', 'refers to', 'states that', 'principle', 'law of', 'equation', 'formula', 'theorem', 'fundamental'])]
+        key_formulas = [s for s in sentences if any(k in s.lower() for k in ['equation', 'formula', '=', 'proportional', 'constant', 'integral', 'derivative', 'function', 'state variable', 'rate of'])]
+        key_applications = [s for s in sentences if any(k in s.lower() for k in ['application', 'applied', 'used in', 'system', 'engine', 'circuit', 'model', 'comput', 'implement'])]
         
         if key_definitions:
-            summary = " ".join(key_definitions[:2])
+            summary = " ".join(key_definitions[:3])
         elif sentences:
-            summary = " ".join(sentences[:2])
+            summary = " ".join(sentences[:3])
         else:
-            summary = f"Core theoretical curriculum module and principles for {chapter_title} in {subject}."
+            summary = f"Core theoretical curriculum module and governing principles for {chapter_title} in {subject}."
 
         objectives = [
-            f"Understand the fundamental definitions and mechanics of {chapter_title}",
-            f"Apply governing equations and analytical laws of {chapter_title} to problem solving",
-            f"Identify and resolve common conceptual pitfalls in {subject} ({tier})"
+            f"Master the fundamental axioms, definitions, and mechanics of {chapter_title}",
+            f"Derive and apply governing equations and analytical laws of {chapter_title} to problem solving",
+            f"Analyze real-world domain applications and diagnose critical boundary conditions",
+            f"Identify and resolve cognitive traps and common misconceptions in {subject} ({tier})"
         ]
 
         cards = []
@@ -85,16 +88,16 @@ class QuestionGeneratorEngine:
             "id": f"card_ch{chapter_index}_1_{uuid.uuid4().hex[:4]}",
             "topic": f"{chapter_title} Fundamentals",
             "question": f"What is the foundational definition and governing principle of {chapter_title}?",
-            "answer": f"• Principle: {c1_text[:220]}\n• Significance: Establishes the governing theoretical framework in {subject}.\n• Key Focus: Mastery of foundational terminology and invariant relationships."
+            "answer": f"• Principle: {c1_text[:240]}\n• Significance: Establishes the primary theoretical framework in {subject}.\n• Key Focus: Mastery of foundational terminology and invariant relationships."
         })
 
         # Card 2: Mechanics & Mathematical/Analytical Behavior
-        c2_text = key_definitions[1] if len(key_definitions) > 1 else (sentences[1] if len(sentences) > 1 else "Governing laws and relationships.")
+        c2_text = key_formulas[0] if len(key_formulas) > 0 else (key_definitions[1] if len(key_definitions) > 1 else (sentences[1] if len(sentences) > 1 else "Governing laws and relationships."))
         cards.append({
             "id": f"card_ch{chapter_index}_2_{uuid.uuid4().hex[:4]}",
-            "topic": f"{chapter_title} Mechanisms & Rules",
-            "question": f"How do the analytical rules and governing mechanisms operate in {chapter_title}?",
-            "answer": f"• Mechanism: {c2_text[:220]}\n• Governing Law: Connects state variables and foundational properties.\n• Execution: Always check dimensional consistency and theoretical bounds."
+            "topic": f"{chapter_title} Formulations & Rules",
+            "question": f"How do the analytical equations and governing mechanisms operate in {chapter_title}?",
+            "answer": f"• Governing Law: {c2_text[:240]}\n• Mechanics: Connects state variables and foundational system properties.\n• Execution: Verify dimensional consistency and theoretical bounds."
         })
 
         # Card 3: Practical Application & Pitfalls
@@ -102,13 +105,57 @@ class QuestionGeneratorEngine:
             "id": f"card_ch{chapter_index}_3_{uuid.uuid4().hex[:4]}",
             "topic": f"{chapter_title} Applications & Diagnostics",
             "question": f"What is the primary problem-solving strategy and common pitfall for {chapter_title}?",
-            "answer": f"• Strategy: Deconstruct problems into primary axioms before applying formulas.\n• Cognitive Trap: Avoid confusing definitions with derived applications.\n• Verification: Validate solutions against limiting cases and boundary conditions."
+            "answer": f"• Strategy: Deconstruct problem scenarios into fundamental axioms before applying formulas.\n• Cognitive Trap: Confusing defining axioms with derived empirical approximations.\n• Verification: Validate calculated outputs against limiting cases and conservation laws."
         })
+
+        # Structured Deep Theory Suite
+        deep_theory = {
+            "principles": [
+                {
+                    "title": "Primary Governing Principle",
+                    "content": key_definitions[0] if key_definitions else summary,
+                    "tag": "Core Axiom"
+                },
+                {
+                    "title": "Theoretical Mechanics & State Invariants",
+                    "content": key_definitions[1] if len(key_definitions) > 1 else (sentences[1] if len(sentences) > 1 else f"State relations governing {chapter_title}."),
+                    "tag": "Mechanics"
+                }
+            ],
+            "formulations": [
+                {
+                    "title": "Governing Equation & Mathematical Formulation",
+                    "formula": key_formulas[0] if key_formulas else f"Mathematical model for {chapter_title}",
+                    "derivation": "Derived from fundamental conservation principles and foundational state definitions.",
+                    "variables": "State properties, boundary constraints, and fundamental proportionality constants."
+                }
+            ],
+            "mental_models": [
+                {
+                    "concept": "Intuitive Mental Model",
+                    "analogy": f"Think of {chapter_title} as an interconnected equilibrium system where perturbations propagate through governing state laws.",
+                    "takeaway": "Always track what remains invariant versus what is dynamic."
+                }
+            ],
+            "applications": [
+                {
+                    "domain": f"Applied {subject} & Engineering Systems",
+                    "description": key_applications[0] if key_applications else f"Deploys theoretical principles of {chapter_title} to optimize real-world analytical pipelines and predictive modeling."
+                }
+            ],
+            "misconceptions": [
+                {
+                    "trap": "Superficial Formula Memorization Without Understanding Boundary Assumptions",
+                    "correction": "Always establish the operational domain and validity bounds before calculating numerical or qualitative states."
+                }
+            ]
+        }
 
         return {
             "summary": summary,
             "objectives": objectives,
-            "cards": cards
+            "cards": cards,
+            "deep_theory": deep_theory
         }
 
     def generate_assessment_items(

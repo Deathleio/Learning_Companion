@@ -176,6 +176,8 @@ def process_and_ingest_material(
             "summary": theory_data.get("summary", ""),
             "objectives": theory_data.get("objectives", []),
             "cards": ch_cards,
+            "deep_theory": theory_data.get("deep_theory", {}),
+            "full_text": ch_content,
             "content_preview": ch_content[:400] + "..." if len(ch_content) > 400 else ch_content
         })
 
