@@ -1,0 +1,536 @@
+{
+  "course_id": "custom_phy_534673",
+  "title": "Principles-of-Data-Science-WEB",
+  "subject": "Physics",
+  "academic_tier": "Undergraduate",
+  "is_builtin": false,
+  "description": "Custom ingested curriculum for Principles-of-Data-Science-WEB.",
+  "chapters_count": 8,
+  "flashcards_count": 24,
+  "quizzes_count": 8,
+  "exam_questions_count": 4,
+  "chapters": [
+    {
+      "chapter_id": "ch_1",
+      "chapter_index": 1,
+      "title": "1.4 Using Technology for Data Science 28",
+      "summary": "This chapter introduces the foundational principles of data science and its application in physics, emphasizing the critical role of technology. It specifically explores how Python serves as a powerful computational tool for acquiring, analyzing, visualizing, and interpreting scientific data. The goal is to equip students with the practical skills necessary to leverage modern data science techniques for solving complex physics problems.",
+      "objectives": [
+        "Apply fundamental data science principles and computational tools, particularly Python, to analyze and interpret physics datasets.",
+        "Identify and explain key terminology and concepts related to data acquisition, processing, and visualization in a scientific context.",
+        "Critically evaluate data analysis methodologies and present quantitative solutions to physics problems using technological approaches."
+      ],
+      "cards": [
+        {
+          "id": "c1_1_2870",
+          "topic": "Role of Data Science in Physics",
+          "question": "What is the primary role of data science in undergraduate physics studies?",
+          "answer": "• To equip students with computational methods for analyzing experimental and simulated data.\n• To bridge theoretical physics with practical data interpretation and problem-solving.\n• To foster critical thinking about data quality, analysis techniques, and scientific conclusions."
+        },
+        {
+          "id": "c1_2_3d13",
+          "topic": "Python's Importance in Physics Data Science",
+          "question": "Why is Python a preferred technology for data science applications in physics?",
+          "answer": "• It offers a rich ecosystem of specialized libraries (e.g., NumPy, SciPy, Matplotlib) for numerical computation, scientific computing, and data visualization.\n• Its readability, versatility, and extensive community support make it accessible for students to learn and apply to complex physics problems.\n• It supports automation, reproducibility, and integration with various data sources and analysis workflows common in scientific research."
+        },
+        {
+          "id": "c1_3_43b0",
+          "topic": "Core Data Science Workflow",
+          "question": "Outline the typical high-level steps involved in a data science workflow for a physics problem.",
+          "answer": "• **Data Acquisition & Preprocessing:** Collecting raw data from experiments or simulations, followed by cleaning and preparing it for analysis.\n• **Exploratory Data Analysis (EDA) & Modeling:** Using statistical summaries and visualizations to understand data patterns, then applying appropriate analytical or machine learning models.\n• **Interpretation & Communication:** Drawing meaningful conclusions from the analysis and effectively presenting findings through reports, visualizations, or presentations."
+        }
+      ],
+      "content_preview": "1.5 Data Science with Python 30 \nKey Terms 52 \nGroup Project 53 \nChapter Review 54 \nCritical Thinking 54 \nQuantitative Problems 55"
+    },
+    {
+      "chapter_id": "ch_2",
+      "chapter_index": 2,
+      "title": "2.4 Data Cleaning and Preprocessing 76",
+      "summary": "This chapter delves into the unique challenges and advanced strategies for effectively managing and processing large datasets, which are increasingly common in modern physics research. It covers techniques to overcome computational limitations, optimize data storage and retrieval, and ensure efficient analysis workflows. The focus is on practical approaches to handle data volumes that exceed typical system capabilities, emphasizing scalability and performance.",
+      "objectives": [
+        "Identify the computational, storage, and logistical challenges inherent in working with large datasets in physics.",
+        "Evaluate and apply various strategies, such as parallel processing, data sampling, and streaming, for efficient handling and analysis of massive data volumes.",
+        "Understand the role of specialized tools, data formats, and infrastructure (e.g., cloud computing, distributed systems) in managing and processing large-scale physics data."
+      ],
+      "cards": [
+        {
+          "id": "c2_1_a42d",
+          "topic": "Challenges of Large Datasets",
+          "question": "What are the primary challenges posed by 'large datasets' in physics research?",
+          "answer": "•   **Computational Resources:** Exceeding available RAM, CPU limits, and disk I/O speeds, leading to slow processing.\n•   **Storage & Transfer:** Managing vast amounts of data requires specialized, scalable storage solutions and efficient network transfer protocols.\n•   **Analysis Complexity:** Developing algorithms that scale efficiently with data size and produce timely, meaningful results becomes significantly harder."
+        },
+        {
+          "id": "c2_2_e74c",
+          "topic": "Strategies for Large Dataset Handling",
+          "question": "What are key strategies to efficiently manage and process large datasets in physics?",
+          "answer": "•   **Parallel Processing:** Distributing computations across multiple processors or machines (e.g., using HPC clusters or cloud services) to speed up tasks.\n•   **Data Sampling/Reduction:** Analyzing a representative subset of the data or reducing its dimensionality to make processing feasible within resource constraints.\n•   **Streaming & Iterative Processing:** Processing data in smaller chunks or passes, avoiding the need to load the entire dataset into memory at once."
+        },
+        {
+          "id": "c2_3_10cc",
+          "topic": "Optimizing Large Data Workflows",
+          "question": "How can data workflows be optimized for large-scale physics datasets?",
+          "answer": "•   **Efficient Data Formats:** Utilizing binary, compressed, or columnar data formats (e.g., HDF5, Parquet) for faster I/O and reduced storage footprint.\n•   **Specialized Tools & Frameworks:** Employing big data frameworks (e.g., Apache Spark, Dask) or database systems designed for distributed processing and scalability.\n•   **Resource Allocation:** Strategically leveraging cloud computing, distributed file systems, and high-performance computing (HPC) resources to match computational needs."
+        }
+      ],
+      "content_preview": "2.5 Handling Large Datasets 88 \nKey Terms 94 \nGroup Project 96 \nCritical Thinking 97"
+    },
+    {
+      "chapter_id": "ch_3",
+      "chapter_index": 3,
+      "title": "3.4 Probability Theory 119",
+      "summary": "Chapter 3.4 introduces the fundamental concepts of probability theory, establishing the groundwork for understanding random phenomena and quantifying uncertainty. It covers essential definitions such as sample spaces, events, and random variables, alongside core principles like the addition and multiplication rules. This theoretical foundation is critical for analyzing experimental outcomes and preparing for the study of specific probability distributions.",
+      "objectives": [
+        "Define and differentiate between key probability concepts including sample space, events, and random variables.",
+        "Apply the fundamental rules of probability, such as the addition rule, multiplication rule, and conditional probability, to solve problems involving event likelihoods.",
+        "Determine if two events are independent and understand the implications of independence in probability calculations."
+      ],
+      "cards": [
+        {
+          "id": "c3_1_b2fe",
+          "topic": "Core Probability Concepts",
+          "question": "What are the fundamental components used to describe a probability experiment?",
+          "answer": "•  **Sample Space (S):** The set of all possible outcomes of a random experiment.\n•  **Event (E):** A subset of the sample space, representing a specific outcome or collection of outcomes.\n•  **Random Variable (X):** A numerical value assigned to each outcome in the sample space."
+        },
+        {
+          "id": "c3_2_8afe",
+          "topic": "Rules of Probability",
+          "question": "Explain the addition and multiplication rules for calculating probabilities of events.",
+          "answer": "•  **Addition Rule (P(A U B)):** P(A) + P(B) - P(A ∩ B). If A and B are mutually exclusive, P(A U B) = P(A) + P(B).\n•  **Multiplication Rule (P(A ∩ B)):** P(A|B) * P(B). If A and B are independent, P(A ∩ B) = P(A) * P(B)."
+        },
+        {
+          "id": "c3_3_f318",
+          "topic": "Conditional Probability & Independence",
+          "question": "Define conditional probability and describe what it means for two events to be independent.",
+          "answer": "•  **Conditional Probability (P(A|B)):** The probability of event A occurring given that event B has already occurred, calculated as P(A ∩ B) / P(B).\n•  **Independent Events:** Two events A and B are independent if the occurrence of one does not affect the probability of the other, meaning P(A|B) = P(A) and P(B|A) = P(B)."
+        }
+      ],
+      "content_preview": "3.5 Discrete and Continuous Probability Distributions 127 \nKey Terms 140 \nGroup Project 141 \nQuantitative Problems 142\n\nInferential Statistics and Regression Analysis 145 \n4"
+    },
+    {
+      "chapter_id": "ch_4",
+      "chapter_index": 4,
+      "title": "4.4 Analysis of Variance (ANOVA) 202",
+      "summary": "Analysis of Variance (ANOVA) is a statistical method used to determine if there are significant differences between the means of three or more independent groups. It achieves this by partitioning the total variance in a dataset into components attributable to different sources, primarily comparing the variance between group means to the variance within groups. This technique is crucial in experimental physics for evaluating the impact of different conditions or treatments on measured outcomes.",
+      "objectives": [
+        "Understand the fundamental principles and assumptions of one-way ANOVA for comparing multiple group means in experimental data.",
+        "Be able to interpret ANOVA results, including F-statistics and p-values, to draw statistically sound conclusions about experimental hypotheses.",
+        "Apply ANOVA to analyze measurement data from physics experiments, identifying significant differences between experimental conditions or treatments."
+      ],
+      "cards": [
+        {
+          "id": "c4_1_9e06",
+          "topic": "ANOVA Purpose",
+          "question": "What is the primary purpose of Analysis of Variance (ANOVA) in experimental data analysis?",
+          "answer": "• To determine if there are statistically significant differences between the means of three or more independent groups.\n• It extends the t-test, preventing inflated Type I error rates that would occur from multiple pairwise comparisons."
+        },
+        {
+          "id": "c4_2_682c",
+          "topic": "F-statistic Interpretation",
+          "question": "How is the F-statistic calculated in ANOVA, and what does a high F-value indicate?",
+          "answer": "• The F-statistic is calculated as the ratio of 'Mean Square Between Groups' to 'Mean Square Within Groups' (F = MS_between / MS_within).\n• A high F-value indicates that the variability between the group means is significantly larger than the variability within the groups, suggesting a strong likelihood of true differences between the population means."
+        },
+        {
+          "id": "c4_3_0cb6",
+          "topic": "ANOVA Assumptions",
+          "question": "What are the key assumptions that must be met for a valid application of ANOVA?",
+          "answer": "• **Independence:** Observations within and between groups must be independent.\n• **Normality:** The data within each group should be approximately normally distributed.\n• **Homoscedasticity:** The variance among the groups should be approximately equal (homogeneity of variances)."
+        }
+      ],
+      "content_preview": "Key Terms 207 \nGroup Project 209 \nQuantitative Problems 209 \n UNIT 3 PREDICTING AND MODELING USING DATA \nTime Series and Forecasting 213 \n5"
+    },
+    {
+      "chapter_id": "ch_5",
+      "chapter_index": 5,
+      "title": "5.4 Forecast Evaluation Methods 253",
+      "summary": "Decision-Making Using Machine Learning Basics 265",
+      "objectives": [
+        "Understand core principles of 5.4 Forecast Evaluation Methods 253",
+        "Apply fundamental relationships to solve problems"
+      ],
+      "cards": [
+        {
+          "id": "card_ch5_1_a15c",
+          "topic": "5.4 Forecast Evaluation Methods 253 - Part 1",
+          "question": "What are the core fundamentals and significance of 5.4 Forecast Evaluation Methods 253?",
+          "answer": "• Key Principle: Decision-Making Using Machine Learning Basics 265...\n• Application: Essential foundation in Physics.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch5_2_3635",
+          "topic": "5.4 Forecast Evaluation Methods 253 Application 2",
+          "question": "How do practitioners apply 5.4 Forecast Evaluation Methods 253 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch5_3_6228",
+          "topic": "5.4 Forecast Evaluation Methods 253 Application 3",
+          "question": "How do practitioners apply 5.4 Forecast Evaluation Methods 253 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        }
+      ],
+      "content_preview": "Key Terms 258 \nGroup Project 259 \nCritical Thinking 260 \nQuantitative Problems 261 \nDecision-Making Using Machine Learning Basics 265 \n6"
+    },
+    {
+      "chapter_id": "ch_6",
+      "chapter_index": 6,
+      "title": "6.4 Decision Trees 306",
+      "summary": "6.5 Other Machine Learning Techniques 316",
+      "objectives": [
+        "Understand core principles of 6.4 Decision Trees 306",
+        "Apply fundamental relationships to solve problems"
+      ],
+      "cards": [
+        {
+          "id": "card_ch6_1_734b",
+          "topic": "6.4 Decision Trees 306 - Part 1",
+          "question": "What are the core fundamentals and significance of 6.4 Decision Trees 306?",
+          "answer": "• Key Principle: 6.5 Other Machine Learning Techniques 316...\n• Application: Essential foundation in Physics.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch6_2_a1ba",
+          "topic": "6.4 Decision Trees 306 Application 2",
+          "question": "How do practitioners apply 6.4 Decision Trees 306 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch6_3_f732",
+          "topic": "6.4 Decision Trees 306 Application 3",
+          "question": "How do practitioners apply 6.4 Decision Trees 306 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        }
+      ],
+      "content_preview": "6.5 Other Machine Learning Techniques 316 \nKey Terms 326 \nGroup Project 327 \nChapter Review 328 \nCritical Thinking 328 \nQuantitative Problems 328"
+    },
+    {
+      "chapter_id": "ch_7",
+      "chapter_index": 7,
+      "title": "7.4 Convolutional Neural Networks 357",
+      "summary": "7.5 Natural Language Processing 359",
+      "objectives": [
+        "Understand core principles of 7.4 Convolutional Neural Networks 357",
+        "Apply fundamental relationships to solve problems"
+      ],
+      "cards": [
+        {
+          "id": "card_ch7_1_2091",
+          "topic": "7.4 Convolutional Neural Networks 357 - Part 1",
+          "question": "What are the core fundamentals and significance of 7.4 Convolutional Neural Networks 357?",
+          "answer": "• Key Principle: 7.5 Natural Language Processing 359...\n• Application: Essential foundation in Physics.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch7_2_b558",
+          "topic": "7.4 Convolutional Neural Networks 357 - Part 2",
+          "question": "What are the core fundamentals and significance of 7.4 Convolutional Neural Networks 357?",
+          "answer": "• Key Principle: Access for free at openstax.org...\n• Application: Essential foundation in Physics.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch7_3_5a00",
+          "topic": "7.4 Convolutional Neural Networks 357 Application 3",
+          "question": "How do practitioners apply 7.4 Convolutional Neural Networks 357 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        }
+      ],
+      "content_preview": "7.5 Natural Language Processing 359 \nKey Terms 370 \nAccess for free at openstax.org\n\nGroup Project 371 \nChapter Review 372 \nCritical Thinking 373 \nQuantitative Problems 374"
+    },
+    {
+      "chapter_id": "ch_8",
+      "chapter_index": 8,
+      "title": "8.2 Ethics in Data Analysis and Modeling 388",
+      "summary": "8.3 Ethics in Visualization and Reporting 395",
+      "objectives": [
+        "Understand core principles of 8.2 Ethics in Data Analysis and Modeling 388",
+        "Apply fundamental relationships to solve problems"
+      ],
+      "cards": [
+        {
+          "id": "card_ch8_1_944b",
+          "topic": "8.2 Ethics in Data Analysis and Modeling 388 - Part 1",
+          "question": "What are the core fundamentals and significance of 8.2 Ethics in Data Analysis and Modeling 388?",
+          "answer": "• Key Principle: 8.3 Ethics in Visualization and Reporting 395...\n• Application: Essential foundation in Physics.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch8_2_1a5c",
+          "topic": "8.2 Ethics in Data Analysis and Modeling 388 Application 2",
+          "question": "How do practitioners apply 8.2 Ethics in Data Analysis and Modeling 388 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        },
+        {
+          "id": "card_ch8_3_2e40",
+          "topic": "8.2 Ethics in Data Analysis and Modeling 388 Application 3",
+          "question": "How do practitioners apply 8.2 Ethics in Data Analysis and Modeling 388 in practice?",
+          "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+          "source": "heuristic_fallback"
+        }
+      ],
+      "content_preview": "8.3 Ethics in Visualization and Reporting 395 \nKey Terms 404 \nGroup Project 405 \nChapter Review 407 \nCritical Thinking 410"
+    }
+  ],
+  "cards": [
+    {
+      "id": "c1_1_2870",
+      "topic": "Role of Data Science in Physics",
+      "question": "What is the primary role of data science in undergraduate physics studies?",
+      "answer": "• To equip students with computational methods for analyzing experimental and simulated data.\n• To bridge theoretical physics with practical data interpretation and problem-solving.\n• To foster critical thinking about data quality, analysis techniques, and scientific conclusions."
+    },
+    {
+      "id": "c1_2_3d13",
+      "topic": "Python's Importance in Physics Data Science",
+      "question": "Why is Python a preferred technology for data science applications in physics?",
+      "answer": "• It offers a rich ecosystem of specialized libraries (e.g., NumPy, SciPy, Matplotlib) for numerical computation, scientific computing, and data visualization.\n• Its readability, versatility, and extensive community support make it accessible for students to learn and apply to complex physics problems.\n• It supports automation, reproducibility, and integration with various data sources and analysis workflows common in scientific research."
+    },
+    {
+      "id": "c1_3_43b0",
+      "topic": "Core Data Science Workflow",
+      "question": "Outline the typical high-level steps involved in a data science workflow for a physics problem.",
+      "answer": "• **Data Acquisition & Preprocessing:** Collecting raw data from experiments or simulations, followed by cleaning and preparing it for analysis.\n• **Exploratory Data Analysis (EDA) & Modeling:** Using statistical summaries and visualizations to understand data patterns, then applying appropriate analytical or machine learning models.\n• **Interpretation & Communication:** Drawing meaningful conclusions from the analysis and effectively presenting findings through reports, visualizations, or presentations."
+    },
+    {
+      "id": "c2_1_a42d",
+      "topic": "Challenges of Large Datasets",
+      "question": "What are the primary challenges posed by 'large datasets' in physics research?",
+      "answer": "•   **Computational Resources:** Exceeding available RAM, CPU limits, and disk I/O speeds, leading to slow processing.\n•   **Storage & Transfer:** Managing vast amounts of data requires specialized, scalable storage solutions and efficient network transfer protocols.\n•   **Analysis Complexity:** Developing algorithms that scale efficiently with data size and produce timely, meaningful results becomes significantly harder."
+    },
+    {
+      "id": "c2_2_e74c",
+      "topic": "Strategies for Large Dataset Handling",
+      "question": "What are key strategies to efficiently manage and process large datasets in physics?",
+      "answer": "•   **Parallel Processing:** Distributing computations across multiple processors or machines (e.g., using HPC clusters or cloud services) to speed up tasks.\n•   **Data Sampling/Reduction:** Analyzing a representative subset of the data or reducing its dimensionality to make processing feasible within resource constraints.\n•   **Streaming & Iterative Processing:** Processing data in smaller chunks or passes, avoiding the need to load the entire dataset into memory at once."
+    },
+    {
+      "id": "c2_3_10cc",
+      "topic": "Optimizing Large Data Workflows",
+      "question": "How can data workflows be optimized for large-scale physics datasets?",
+      "answer": "•   **Efficient Data Formats:** Utilizing binary, compressed, or columnar data formats (e.g., HDF5, Parquet) for faster I/O and reduced storage footprint.\n•   **Specialized Tools & Frameworks:** Employing big data frameworks (e.g., Apache Spark, Dask) or database systems designed for distributed processing and scalability.\n•   **Resource Allocation:** Strategically leveraging cloud computing, distributed file systems, and high-performance computing (HPC) resources to match computational needs."
+    },
+    {
+      "id": "c3_1_b2fe",
+      "topic": "Core Probability Concepts",
+      "question": "What are the fundamental components used to describe a probability experiment?",
+      "answer": "•  **Sample Space (S):** The set of all possible outcomes of a random experiment.\n•  **Event (E):** A subset of the sample space, representing a specific outcome or collection of outcomes.\n•  **Random Variable (X):** A numerical value assigned to each outcome in the sample space."
+    },
+    {
+      "id": "c3_2_8afe",
+      "topic": "Rules of Probability",
+      "question": "Explain the addition and multiplication rules for calculating probabilities of events.",
+      "answer": "•  **Addition Rule (P(A U B)):** P(A) + P(B) - P(A ∩ B). If A and B are mutually exclusive, P(A U B) = P(A) + P(B).\n•  **Multiplication Rule (P(A ∩ B)):** P(A|B) * P(B). If A and B are independent, P(A ∩ B) = P(A) * P(B)."
+    },
+    {
+      "id": "c3_3_f318",
+      "topic": "Conditional Probability & Independence",
+      "question": "Define conditional probability and describe what it means for two events to be independent.",
+      "answer": "•  **Conditional Probability (P(A|B)):** The probability of event A occurring given that event B has already occurred, calculated as P(A ∩ B) / P(B).\n•  **Independent Events:** Two events A and B are independent if the occurrence of one does not affect the probability of the other, meaning P(A|B) = P(A) and P(B|A) = P(B)."
+    },
+    {
+      "id": "c4_1_9e06",
+      "topic": "ANOVA Purpose",
+      "question": "What is the primary purpose of Analysis of Variance (ANOVA) in experimental data analysis?",
+      "answer": "• To determine if there are statistically significant differences between the means of three or more independent groups.\n• It extends the t-test, preventing inflated Type I error rates that would occur from multiple pairwise comparisons."
+    },
+    {
+      "id": "c4_2_682c",
+      "topic": "F-statistic Interpretation",
+      "question": "How is the F-statistic calculated in ANOVA, and what does a high F-value indicate?",
+      "answer": "• The F-statistic is calculated as the ratio of 'Mean Square Between Groups' to 'Mean Square Within Groups' (F = MS_between / MS_within).\n• A high F-value indicates that the variability between the group means is significantly larger than the variability within the groups, suggesting a strong likelihood of true differences between the population means."
+    },
+    {
+      "id": "c4_3_0cb6",
+      "topic": "ANOVA Assumptions",
+      "question": "What are the key assumptions that must be met for a valid application of ANOVA?",
+      "answer": "• **Independence:** Observations within and between groups must be independent.\n• **Normality:** The data within each group should be approximately normally distributed.\n• **Homoscedasticity:** The variance among the groups should be approximately equal (homogeneity of variances)."
+    },
+    {
+      "id": "card_ch5_1_a15c",
+      "topic": "5.4 Forecast Evaluation Methods 253 - Part 1",
+      "question": "What are the core fundamentals and significance of 5.4 Forecast Evaluation Methods 253?",
+      "answer": "• Key Principle: Decision-Making Using Machine Learning Basics 265...\n• Application: Essential foundation in Physics.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch5_2_3635",
+      "topic": "5.4 Forecast Evaluation Methods 253 Application 2",
+      "question": "How do practitioners apply 5.4 Forecast Evaluation Methods 253 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch5_3_6228",
+      "topic": "5.4 Forecast Evaluation Methods 253 Application 3",
+      "question": "How do practitioners apply 5.4 Forecast Evaluation Methods 253 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch6_1_734b",
+      "topic": "6.4 Decision Trees 306 - Part 1",
+      "question": "What are the core fundamentals and significance of 6.4 Decision Trees 306?",
+      "answer": "• Key Principle: 6.5 Other Machine Learning Techniques 316...\n• Application: Essential foundation in Physics.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch6_2_a1ba",
+      "topic": "6.4 Decision Trees 306 Application 2",
+      "question": "How do practitioners apply 6.4 Decision Trees 306 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch6_3_f732",
+      "topic": "6.4 Decision Trees 306 Application 3",
+      "question": "How do practitioners apply 6.4 Decision Trees 306 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch7_1_2091",
+      "topic": "7.4 Convolutional Neural Networks 357 - Part 1",
+      "question": "What are the core fundamentals and significance of 7.4 Convolutional Neural Networks 357?",
+      "answer": "• Key Principle: 7.5 Natural Language Processing 359...\n• Application: Essential foundation in Physics.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch7_2_b558",
+      "topic": "7.4 Convolutional Neural Networks 357 - Part 2",
+      "question": "What are the core fundamentals and significance of 7.4 Convolutional Neural Networks 357?",
+      "answer": "• Key Principle: Access for free at openstax.org...\n• Application: Essential foundation in Physics.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch7_3_5a00",
+      "topic": "7.4 Convolutional Neural Networks 357 Application 3",
+      "question": "How do practitioners apply 7.4 Convolutional Neural Networks 357 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch8_1_944b",
+      "topic": "8.2 Ethics in Data Analysis and Modeling 388 - Part 1",
+      "question": "What are the core fundamentals and significance of 8.2 Ethics in Data Analysis and Modeling 388?",
+      "answer": "• Key Principle: 8.3 Ethics in Visualization and Reporting 395...\n• Application: Essential foundation in Physics.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch8_2_1a5c",
+      "topic": "8.2 Ethics in Data Analysis and Modeling 388 Application 2",
+      "question": "How do practitioners apply 8.2 Ethics in Data Analysis and Modeling 388 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    },
+    {
+      "id": "card_ch8_3_2e40",
+      "topic": "8.2 Ethics in Data Analysis and Modeling 388 Application 3",
+      "question": "How do practitioners apply 8.2 Ethics in Data Analysis and Modeling 388 in practice?",
+      "answer": "• Analytical Framework: Governs core behavior in Physics.\n• Rule: Always balance theoretical laws with empirical observation.",
+      "source": "heuristic_fallback"
+    }
+  ],
+  "quizzes": [
+    {
+      "id": "q_auto_1",
+      "text": "What is the foundational concept and role of 1.4 Using Technology for Data Science 28 in Physics?",
+      "concept": "1.4 Using Technology for Data Science 28",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_2",
+      "text": "What is the foundational concept and role of 2.4 Data Cleaning and Preprocessing 76 in Physics?",
+      "concept": "2.4 Data Cleaning and Preprocessing 76",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_3",
+      "text": "What is the foundational concept and role of 3.4 Probability Theory 119 in Physics?",
+      "concept": "3.4 Probability Theory 119",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_4",
+      "text": "What is the foundational concept and role of 4.4 Analysis of Variance (ANOVA) 202 in Physics?",
+      "concept": "4.4 Analysis of Variance (ANOVA) 202",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_5",
+      "text": "What is the foundational concept and role of 5.4 Forecast Evaluation Methods 253 in Physics?",
+      "concept": "5.4 Forecast Evaluation Methods 253",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_6",
+      "text": "What is the foundational concept and role of 6.4 Decision Trees 306 in Physics?",
+      "concept": "6.4 Decision Trees 306",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_7",
+      "text": "What is the foundational concept and role of 7.4 Convolutional Neural Networks 357 in Physics?",
+      "concept": "7.4 Convolutional Neural Networks 357",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    },
+    {
+      "id": "q_auto_8",
+      "text": "What is the foundational concept and role of 8.2 Ethics in Data Analysis and Modeling 388 in Physics?",
+      "concept": "8.2 Ethics in Data Analysis and Modeling 388",
+      "options": [],
+      "correct_answer": "Core governing principle"
+    }
+  ],
+  "finalExam": [
+    {
+      "qId": "exam_auto_1",
+      "moduleOrigin": "Module 1: 1.4 Using Technology for Data Science 28",
+      "question_type": "short_answer",
+      "options": [],
+      "text": "State the primary theoretical law or invariant mechanism underpinning 1.4 Using Technology for Data Science 28.",
+      "expected": "1.4 Using Technology for Data Science 28",
+      "formula": "Fundamental theorem of 1.4 Using Technology for Data Science 28",
+      "misconception": "Confusing foundational definitions with peripheral applications."
+    },
+    {
+      "qId": "exam_auto_2",
+      "moduleOrigin": "Module 2: 2.4 Data Cleaning and Preprocessing 76",
+      "question_type": "short_answer",
+      "options": [],
+      "text": "State the primary theoretical law or invariant mechanism underpinning 2.4 Data Cleaning and Preprocessing 76.",
+      "expected": "2.4 Data Cleaning and Preprocessing 76",
+      "formula": "Fundamental theorem of 2.4 Data Cleaning and Preprocessing 76",
+      "misconception": "Confusing foundational definitions with peripheral applications."
+    },
+    {
+      "qId": "exam_auto_3",
+      "moduleOrigin": "Module 3: 3.4 Probability Theory 119",
+      "question_type": "short_answer",
+      "options": [],
+      "text": "State the primary theoretical law or invariant mechanism underpinning 3.4 Probability Theory 119.",
+      "expected": "3.4 Probability Theory 119",
+      "formula": "Fundamental theorem of 3.4 Probability Theory 119",
+      "misconception": "Confusing foundational definitions with peripheral applications."
+    },
+    {
+      "qId": "exam_auto_4",
+      "moduleOrigin": "Module 4: 4.4 Analysis of Variance (ANOVA) 202",
+      "question_type": "short_answer",
+      "options": [],
+      "text": "State the primary theoretical law or invariant mechanism underpinning 4.4 Analysis of Variance (ANOVA) 202.",
+      "expected": "4.4 Analysis of Variance (ANOVA) 202",
+      "formula": "Fundamental theorem of 4.4 Analysis of Variance (ANOVA) 202",
+      "misconception": "Confusing foundational definitions with peripheral applications."
+    }
+  ]
+}

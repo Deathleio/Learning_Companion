@@ -4,9 +4,10 @@ import urllib.request
 import urllib.error
 from typing import Optional, Dict, Any, List
 
+
 class LocalLLMService:
     """
-    Offline Local LLM Inference Engine for Llama-3.2-3B-Instruct / Qwen.
+    100% Offline Local LLM Inference Engine for Llama-3.2-3B-Instruct / Qwen.
     Connects to local Ollama instance (http://localhost:11434) or llama-cpp server
     with zero cloud token dependency and zero API costs.
     """
@@ -52,13 +53,13 @@ class LocalLLMService:
                     data = json.loads(res.read().decode("utf-8"))
                     return data.get("response", "").strip()
         except Exception as e:
-            print(f"[LocalLLMService] Inference failed: {e}")
+            print(f"[LocalLLMService] Inference warning: {e}")
             return None
 
         return None
 
     def summarize_chapter_and_generate_cards(self, chapter_title: str, chapter_content: str, subject: str) -> Optional[Dict[str, Any]]:
-        """Generates structured summary and 3 flashcards using local model."""
+        """Generates structured summary and 3 flashcards using local Llama model."""
         prompt = f"""You are an expert curriculum summarizer for {subject}.
 Analyze the following section:
 Title: {chapter_title}
@@ -94,7 +95,6 @@ Respond ONLY with the raw JSON object, no Markdown backticks or commentary."""
             return None
 
         try:
-            # Clean markdown wrappers if any
             clean_json = response_text.strip()
             if clean_json.startswith("```json"):
                 clean_json = clean_json[7:]
@@ -106,6 +106,62 @@ Respond ONLY with the raw JSON object, no Markdown backticks or commentary."""
         except Exception as e:
             print(f"[LocalLLMService] JSON parsing failed: {e}")
             return None
+
+    def generate_course_assessments(
+        self,
+        course_title: str,
+        chapters: List[Dict[str, Any]],
+        subject: str,
+        tier: str
+    ) -> Optional[Dict[str, Any]]:
+        """Generates practice quizzes and summative final exam questions with local Llama model."""
+        context_snippets = []
+        for ch in chapters[:6]:
+            context_snippets.append(f"Chapter {ch.get('chapter_index')}: {ch.get('title')}\nSummary: {ch.get('summary', '')}")
+            
+        full_context = "\n\n".join(context_snippets)
+
+        prompt = f"""You are a test design authority for {subject} ({tier}).
+Based on course '{course_title}':
+{full_context}
+
+Generate a valid JSON object with EXACTLY this structure:
+{{
+  "quizzes": [
+    {{"id": "q_1", "text": "...", "concept": "{chapters[0].get('title', 'Chapter 1')}", "options": ["A", "B", "C", "D"], "correct_answer": "A"}}
+  ],
+  "finalExam": [
+    {{
+      "qId": "exam_1",
+      "moduleOrigin": "Module 1: ...",
+      "question_type": "short_answer",
+      "options": [],
+      "text": "...",
+      "expected": "...",
+      "formula": "...",
+      "misconception": "..."
+    }}
+  ]
+}}
+Respond ONLY with the raw JSON object."""
+
+        response_text = self.generate(prompt=prompt, system_prompt="You are a JSON-only exam question architect.")
+        if not response_text:
+            return None
+
+        try:
+            clean_json = response_text.strip()
+            if clean_json.startswith("```json"):
+                clean_json = clean_json[7:]
+            if clean_json.startswith("```"):
+                clean_json = clean_json[3:]
+            if clean_json.endswith("```"):
+                clean_json = clean_json[:-3]
+            return json.loads(clean_json.strip())
+        except Exception as e:
+            print(f"[LocalLLMService] Assessment JSON parsing failed: {e}")
+            return None
+
 
 # Global instance
 local_llm = LocalLLMService()
