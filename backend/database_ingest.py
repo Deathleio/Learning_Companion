@@ -74,14 +74,70 @@ class DatabaseIngestPipeline:
 
         print(f"[OK] Successfully vectorized and loaded all {total_chunks} paragraphs from {subject} ({academic_tier}) into ChromaDB.")
 
-    def query_verified_context(self, query: str) -> list[str]:
-        """Queries the local collection using verified structural parameters only."""
-        results = self.curriculum_collection.query(
-            query_texts=[query],
-            n_results=2,
-            where={"data_integrity_status": "verified"}
-        )
-        return results['documents'][0] if results['documents'] else []
+    def ingest_custom_chunks(
+        self,
+        course_id: str,
+        chunks: list[str],
+        subject: str = "General",
+        academic_tier: str = "Custom",
+        chapter_id: str = "ch_1",
+        chapter_index: int = 1,
+    ):
+        """Ingests dynamically parsed chunks for a user-created custom course with full namespace metadata."""
+        if not chunks:
+            return 0
+
+        total = len(chunks)
+        ids = [f"{course_id}_{chapter_id}_{i:04d}" for i in range(total)]
+        metadatas = [
+            {
+                "course_id": course_id,
+                "chapter_id": chapter_id,
+                "chapter_index": chapter_index,
+                "subject": subject,
+                "academic_tier": academic_tier,
+                "grade_level": academic_tier,
+                "data_integrity_status": "verified"
+            }
+            for _ in range(total)
+        ]
+
+        batch_size = 500
+        for start_idx in range(0, total, batch_size):
+            end_idx = start_idx + batch_size
+            self.curriculum_collection.add(
+                ids=ids[start_idx:end_idx],
+                documents=chunks[start_idx:end_idx],
+                metadatas=metadatas[start_idx:end_idx],
+            )
+
+        return total
+
+    def query_verified_context(self, query: str, course_id: str = None, subject: str = None, academic_tier: str = None, n_results: int = 3) -> list[str]:
+        """Queries the local collection using verified structural parameters and optional course_id/subject filter."""
+        where_clauses = [{"data_integrity_status": "verified"}]
+        
+        if course_id:
+            where_clauses.append({"course_id": course_id})
+        else:
+            if subject:
+                where_clauses.append({"subject": subject})
+            if academic_tier:
+                where_clauses.append({"academic_tier": academic_tier})
+                
+        where_filter = {"$and": where_clauses} if len(where_clauses) > 1 else where_clauses[0]
+        
+        try:
+            results = self.curriculum_collection.query(
+                query_texts=[query],
+                n_results=n_results,
+                where=where_filter
+            )
+            return results['documents'][0] if results and results.get('documents') and len(results['documents']) > 0 else []
+        except Exception as e:
+            print(f"[ChromaDB] Query error: {e}")
+            return []
+
 
     def preview_interaction_metrics(self, csv_path: str):
         """Validates that your backend Performance Analyzer can cleanly parse your shrunken EdNet sample."""

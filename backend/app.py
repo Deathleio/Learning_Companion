@@ -1,7 +1,9 @@
 import os
 import json
+import uuid
+from typing import Optional, List
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
@@ -16,6 +18,10 @@ from theory_repo import FLASHCARD_REPOSITORY
 from tutor_graph import compiled_tutor_app
 from flashcard_builder import build_flashcards_from_chroma, generate_gemini_flashcards_from_chroma, _gemini_flashcard_cache
 from hint_utils import sanitize_gap_analysis, sanitize_hint_text, HINT_FORMAT_DIRECTIVE
+from material_parser import MaterialParser
+from course_manager import CourseManager
+from question_generator import QuestionGeneratorEngine
+from database_ingest import DatabaseIngestPipeline
 
 app = FastAPI(title="Unified Agentic Socratic Tutoring Platform")
 
@@ -28,12 +34,20 @@ app.add_middleware(
 )
 
 # --- API PAYLOAD SCHEMAS ---
+class IngestMaterialPayload(BaseModel):
+    title: str
+    subject: str = "General"
+    academic_tier: str = "Standard"
+    raw_text: str = ""
+    generate_questions_immediately: bool = True
+
 class ChatSessionPayload(BaseModel):
     message: str
     time_taken: int
     consecutive_errors: int
     current_tier: str
     current_subject: str
+    course_id: Optional[str] = None
     history: list[dict] = []
 
 class ShortAnswerPayload(BaseModel):
@@ -44,6 +58,7 @@ class ShortAnswerPayload(BaseModel):
     attempts_count: int
     current_tier: str
     current_subject: str
+    course_id: Optional[str] = None
     hint_formula: str = ""
     hint_misconception: str = ""
 
@@ -53,12 +68,15 @@ class ExamSubmissionPayload(BaseModel):
     total_elapsed_time: int = 0
     current_tier: str
     current_subject: str
+    course_id: Optional[str] = None
     mock_chat_history: list[dict] = []
     question_details: list[dict] = []
 
 class TheoryRequestPayload(BaseModel):
     current_tier: str
     current_subject: str
+    course_id: Optional[str] = None
+
 
 # --- CORE RAG UTILITY FACTORY ---
 def execute_rag_vector_lookup(subject: str, tier: str, query: str) -> list[str]:
@@ -78,10 +96,224 @@ def execute_rag_vector_lookup(subject: str, tier: str, query: str) -> list[str]:
     except Exception:
         return [f"Core textbook reference material for {tier} level structural {subject} parameters."]
 
+# --- MATERIAL INGESTION & PIPELINE HELPER ---
+def process_and_ingest_material(
+    title: str,
+    subject: str,
+    academic_tier: str,
+    raw_text: str
+) -> dict:
+    """
+    Enterprise Ingestion Pipeline:
+    1. Sanitizes input material.
+    2. Decomposes document into structured chapters/topics.
+    3. Generates high-retention theory summaries and flashcards per chapter.
+    4. Vectors chunks into ChromaDB with course/chapter namespaces.
+    5. Synthesizes formative quizzes and summative final exam questions.
+    6. Persists the complete course into local storage.
+    """
+    clean_text = MaterialParser.clean_text(raw_text)
+    if len(clean_text) < 50:
+        raise HTTPException(status_code=400, detail="The provided material is too short to extract a curriculum.")
+
+    # 1. Detect / Decompose into chapters
+    raw_chapters = MaterialParser.detect_outline_or_chapters(clean_text)
+    if not raw_chapters:
+        raw_chapters = [{
+            "chapter_index": 1,
+            "title": f"{title} - Core Fundamentals",
+            "content": clean_text
+        }]
+
+    course_id = f"custom_{subject.lower()[:3]}_{uuid.uuid4().hex[:6]}"
+    qge = QuestionGeneratorEngine()
+    # Cap chapters for performance on massive 1,000+ page books (max 8 comprehensive chapters)
+    if len(raw_chapters) > 8:
+        print(f"[Ingestion] Document has {len(raw_chapters)} raw sections. Slicing top 8 major curriculum units.")
+        raw_chapters = raw_chapters[:8]
+
+    db_pipeline = DatabaseIngestPipeline()
+    processed_chapters = []
+    all_cards = []
+
+    # 2. Process each chapter: Fast Theory & Flashcards Synthesis
+    for ch in raw_chapters:
+        ch_idx = ch.get("chapter_index", len(processed_chapters) + 1)
+        ch_title = ch.get("title", f"Chapter {ch_idx}")
+        ch_content = ch.get("content", "")
+        ch_id = f"ch_{ch_idx}"
+
+        # Generate theory and flashcards (Gemini with local/heuristic fallback)
+        theory_data = qge.generate_chapter_theory_and_cards(
+            chapter_title=ch_title,
+            chapter_text=ch_content[:3000],
+            subject=subject,
+            tier=academic_tier,
+            chapter_index=ch_idx
+        )
+
+        ch_cards = theory_data.get("cards", [])
+        all_cards.extend(ch_cards)
+
+        # Create semantic chunks & vectorize to ChromaDB (capped at 15 chunks per chapter for speed)
+        chunks = MaterialParser.create_semantic_chunks(ch_content[:8000], chunk_size=400, overlap=40)[:15]
+        try:
+            db_pipeline.ingest_custom_chunks(
+                course_id=course_id,
+                chunks=chunks,
+                subject=subject,
+                academic_tier=academic_tier,
+                chapter_id=ch_id,
+                chapter_index=ch_idx
+            )
+        except Exception as ve:
+            print(f"[ChromaDB] Vector ingestion warning: {ve}")
+
+        processed_chapters.append({
+            "chapter_id": ch_id,
+            "chapter_index": ch_idx,
+            "title": ch_title,
+            "summary": theory_data.get("summary", ""),
+            "objectives": theory_data.get("objectives", []),
+            "cards": ch_cards,
+            "content_preview": ch_content[:400] + "..." if len(ch_content) > 400 else ch_content
+        })
+
+    # 3. Generate Assessment Items (Practice Quizzes + Threshold Final Exam)
+    assessment = qge.generate_assessment_items(
+        course_title=title,
+        chapters=processed_chapters,
+        subject=subject,
+        tier=academic_tier
+    )
+
+    quizzes = assessment.get("quizzes", [])
+    final_exam = assessment.get("finalExam", [])
+
+    # 4. Assemble and persist course
+    course_record = {
+        "course_id": course_id,
+        "title": title,
+        "subject": subject,
+        "academic_tier": academic_tier,
+        "is_builtin": False,
+        "description": f"Custom ingested curriculum for {title}.",
+        "chapters_count": len(processed_chapters),
+        "flashcards_count": len(all_cards),
+        "quizzes_count": len(quizzes),
+        "exam_questions_count": len(final_exam),
+        "chapters": processed_chapters,
+        "cards": all_cards,
+        "quizzes": quizzes,
+        "finalExam": final_exam
+    }
+
+    CourseManager.save_custom_course(course_record)
+    return course_record
+
+
+# --- INGESTION & COURSE REST ENDPOINTS ---
+
+@app.post("/api/material/ingest")
+async def ingest_material_json(payload: IngestMaterialPayload):
+    """API endpoint to ingest raw text, notes, or syllabus JSON."""
+    try:
+        course = process_and_ingest_material(
+            title=payload.title,
+            subject=payload.subject,
+            academic_tier=payload.academic_tier,
+            raw_text=payload.raw_text
+        )
+        return {
+            "status": "success",
+            "message": f"Successfully ingested material and created course '{course['title']}'.",
+            "course": course
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Ingestion error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to ingest material: {str(e)}")
+
+@app.post("/api/material/upload")
+async def upload_material_file(
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    subject: Optional[str] = Form("General"),
+    academic_tier: Optional[str] = Form("Standard")
+):
+    """API endpoint to upload PDF, TXT, or Markdown documents for automated ingestion."""
+    try:
+        contents = await file.read()
+        filename = (file.filename or "uploaded_document").lower()
+        clean_title = title.strip() if (title and title.strip()) else os.path.splitext(file.filename or "Uploaded Material")[0]
+        
+        if filename.endswith(".pdf"):
+            extracted_text = MaterialParser.extract_text_from_pdf_bytes(contents)
+        else:
+            extracted_text = contents.decode("utf-8", errors="replace")
+            
+        course = process_and_ingest_material(
+            title=clean_title,
+            subject=subject or "General",
+            academic_tier=academic_tier or "Standard",
+            raw_text=extracted_text
+        )
+        return {
+            "status": "success",
+            "message": f"Successfully parsed '{file.filename}' into course '{course['title']}'.",
+            "course": course
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"File upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process uploaded file: {str(e)}")
+
+@app.get("/api/material/courses")
+async def get_all_courses():
+    """Lists all available standard and ingested custom courses."""
+    return {"courses": CourseManager.list_all_courses()}
+
+@app.get("/api/material/course/{course_id}")
+async def get_course_detail(course_id: str):
+    """Retrieves full course structure and theory chapters for a specific course ID."""
+    course = CourseManager.get_course_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail=f"Course '{course_id}' not found.")
+    return course
+
+@app.delete("/api/material/course/{course_id}")
+async def delete_custom_course(course_id: str):
+    """Deletes a custom user course."""
+    success = CourseManager.delete_custom_course(course_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Course not found or is a protected built-in course.")
+    return {"status": "success", "message": f"Course '{course_id}' deleted."}
+
+
 # --- BACKEND ENDPOINT ROUTERS ---
 
 @app.post("/api/tutor/load-theory")
 async def load_dynamic_theory(payload: TheoryRequestPayload):
+    # If a custom course_id is specified, load directly from CourseManager
+    if payload.course_id:
+        course = CourseManager.get_course_by_id(payload.course_id)
+        if course:
+            return {
+                "course_id": course.get("course_id"),
+                "title": course.get("title"),
+                "subject": course.get("subject"),
+                "academic_tier": course.get("academic_tier"),
+                "chapters": course.get("chapters", []),
+                "cards": course.get("cards", []),
+                "quizzes": course.get("quizzes", []),
+                "finalExam": course.get("finalExam", []),
+                "is_ai_generated": True,
+                "is_cached": True,
+                "is_custom": not course.get("is_builtin", False)
+            }
+
     subject_repo = FLASHCARD_REPOSITORY.get(payload.current_subject, {})
     tier_data = subject_repo.get(payload.current_tier, {"cards": [], "quizzes": [], "finalExam": []})
     
@@ -94,13 +326,28 @@ async def load_dynamic_theory(payload: TheoryRequestPayload):
         cards = tier_data.get("cards", [])[:3]
         is_ai = False
 
+    # Derive logical chapters for built-in courses
+    chapters = []
+    for idx, c in enumerate(cards, 1):
+        chapters.append({
+            "chapter_id": f"ch_{idx}",
+            "chapter_index": idx,
+            "title": c.get("topic", f"Chapter {idx}"),
+            "summary": c.get("answer", ""),
+            "objectives": [c.get("question", "")],
+            "cards": [c]
+        })
+
     return {
         "cards": cards,
+        "chapters": chapters,
         "quizzes": tier_data.get("quizzes", []),
         "finalExam": tier_data.get("finalExam", []),
         "is_ai_generated": is_ai,
-        "is_cached": cache_key in _gemini_flashcard_cache
+        "is_cached": cache_key in _gemini_flashcard_cache,
+        "is_custom": False
     }
+
 
 @app.post("/api/tutor/generate-flashcards")
 async def generate_ai_flashcards(payload: TheoryRequestPayload):

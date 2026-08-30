@@ -32,7 +32,7 @@ import gallery3 from '../assets/gallery3.png';
 import gallery4 from '../assets/gallery4.png';
 import gallery5 from '../assets/gallery5.png';
 
-export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTier, onStartLearning }) {
+export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTier, onStartLearning, onOpenIngestion }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectionModalOpen, setSelectionModalOpen] = useState(false);
   const [pendingSelections, setPendingSelections] = useState({ subject: null, tier: null });
@@ -194,16 +194,24 @@ export default function LandingPage({ onSignUp, onNavigateSubject, onNavigateTie
               Experience a cognitive companion that adapts to your unique learning style. 
               Master complex subjects with RAG-powered study decks and real-time Socratic feedback.
             </p>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <button 
                 onClick={onSignUp}
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-6 py-3 rounded-xl shadow-lg shadow-blue-900/20 transition-all flex items-center gap-2"
               >
                 Get Started <ArrowRight className="w-4 h-4" />
               </button>
+              {onOpenIngestion && (
+                <button 
+                  onClick={onOpenIngestion}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm px-5 py-3 rounded-xl shadow-lg shadow-purple-950/40 transition-all flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" /> Ingest Your Notes & Tests
+                </button>
+              )}
               <button 
                 onClick={() => scrollToSection('features')}
-                className="bg-slate-900/50 border border-slate-800 hover:bg-slate-800 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all"
+                className="bg-slate-900/50 border border-slate-800 hover:bg-slate-800 text-white font-bold text-sm px-5 py-3 rounded-xl transition-all"
               >
                 Learn More
               </button>

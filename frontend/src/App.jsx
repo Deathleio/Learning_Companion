@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
+import MaterialIngestionModal from './components/MaterialIngestionModal';
+import CourseStudioView from './components/CourseStudioView';
+import ChapterNav from './components/ChapterNav';
 import { 
   BookOpen, 
   HelpCircle, 
@@ -15,12 +18,19 @@ import {
   Database, 
   Activity, 
   Network, 
-  Sparkles,
-  Bookmark,
-  MessageSquare,
-  Send,
-  Menu,
-  X
+  Sparkles, 
+  Bookmark, 
+  MessageSquare, 
+  Send, 
+  Menu, 
+  X, 
+  Plus, 
+  Layers, 
+  Upload,
+  Compass,
+  Sliders,
+  Check,
+  FolderOpen
 } from 'lucide-react';
 
 /** Lightweight markdown renderer for tutor hints (headers, bullets, bold). */
@@ -288,6 +298,14 @@ export default function App() {
   const [activeView, setActiveView] = useState('theory'); 
   const [mobileHeaderOpen, setMobileHeaderOpen] = useState(false); 
   
+  // Custom Courses & Ingestion Modal States
+  const [isIngestionModalOpen, setIsIngestionModalOpen] = useState(false);
+  const [customCourses, setCustomCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const [activeCourseTitle, setActiveCourseTitle] = useState(null);
+  const [chapters, setChapters] = useState([]);
+  const [activeChapterIndex, setActiveChapterIndex] = useState(null);
+
   // Curriculum States Loaded Dynamically from API
   const [cards, setCards] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
@@ -328,11 +346,50 @@ export default function App() {
   const [isQuestionPassed, setIsQuestionPassed] = useState(false);
   const [currentDegreeOfFailure, setCurrentDegreeOfFailure] = useState(0);
 
+  const [allCourses, setAllCourses] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Fetch available courses (custom + built-in)
+  const fetchAvailableCourses = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/material/courses');
+      if (res.ok) {
+        const data = await res.json();
+        const coursesList = data.courses || [];
+        setAllCourses(coursesList);
+        const userCreated = coursesList.filter(c => !c.is_builtin);
+        setCustomCourses(userCreated);
+      }
+    } catch (err) {
+      console.warn("Could not fetch custom courses list:", err);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/material/course/${courseId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchAvailableCourses();
+        if (selectedCourseId === courseId) {
+          handleResetToStandardCourse('Physics', 'Class 10');
+        }
+      }
+    } catch (err) {
+      console.error("Delete course error:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableCourses();
+  }, []);
 
   // Load curriculum on start or change
   useEffect(() => {
-    loadCurriculum(activeSubject, activeTier);
+    if (!selectedCourseId) {
+      loadCurriculum(activeSubject, activeTier, null);
+    }
   }, [activeSubject, activeTier]);
 
   // Handle ticking stopwatch timer for final exam
@@ -348,24 +405,31 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeView, examReport, lastQuestionEvaluated, loading, activeExamQuestionIndex, finalExams]);
 
-  const loadCurriculum = async (subject, tier) => {
+  const loadCurriculum = async (subject, tier, courseId = null) => {
     setLoading(true);
     clearSessions();
     setIsAiGeneratedCards(false);
     setIsCardsCached(false);
+    setActiveChapterIndex(null);
     try {
       const response = await fetch('http://127.0.0.1:8000/api/tutor/load-theory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_subject: subject, current_tier: tier })
+        body: JSON.stringify({ current_subject: subject, current_tier: tier, course_id: courseId })
       });
       if (!response.ok) throw new Error("API call failed");
       const data = await response.json();
-      setCards((data.cards || []).slice(0, 3));
+      setCards(data.cards || []);
+      setChapters(data.chapters || []);
       setQuizzes(data.quizzes || []);
       setFinalExams(data.finalExam || []);
       setIsAiGeneratedCards(!!data.is_ai_generated);
       setIsCardsCached(!!data.is_cached);
+      if (data.title) {
+        setActiveCourseTitle(data.title);
+      } else {
+        setActiveCourseTitle(`${subject} (${tier})`);
+      }
       
       if (data.quizzes && data.quizzes.length > 0) {
         setCurrentQuestion(data.quizzes[0]);
@@ -374,15 +438,47 @@ export default function App() {
       console.warn("Backend API not reachable. Loading frontend fallback curriculum database...", e);
       // Fallback load
       const fallback = FALLBACK_CURRICULUM[subject]?.[tier] || { cards: [], quizzes: [], finalExam: [] };
-      setCards((fallback.cards || []).slice(0, 3));
+      const fallbackCards = (fallback.cards || []).slice(0, 3);
+      setCards(fallbackCards);
+      setChapters(fallbackCards.map((c, i) => ({
+        chapter_id: `ch_${i+1}`,
+        chapter_index: i+1,
+        title: c.topic || `Chapter ${i+1}`,
+        summary: c.answer || '',
+        cards: [c]
+      })));
       setQuizzes(fallback.quizzes || []);
       setFinalExams(fallback.finalExam || []);
+      setActiveCourseTitle(`${subject} (${tier})`);
       if (fallback.quizzes && fallback.quizzes.length > 0) {
         setCurrentQuestion(fallback.quizzes[0]);
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectCustomCourse = (course) => {
+    setSelectedCourseId(course.course_id);
+    setActiveSubject(course.subject || 'General');
+    setActiveTier(course.academic_tier || 'Custom');
+    setActiveCourseTitle(course.title);
+    loadCurriculum(course.subject, course.academic_tier, course.course_id);
+  };
+
+  const handleResetToStandardCourse = (subject, tier) => {
+    setSelectedCourseId(null);
+    setActiveSubject(subject);
+    setActiveTier(tier);
+    setActiveCourseTitle(`${subject} (${tier})`);
+    loadCurriculum(subject, tier, null);
+  };
+
+  const handleIngestionComplete = (newCourse) => {
+    setIsIngestionModalOpen(false);
+    setShowLanding(false);
+    fetchAvailableCourses();
+    handleSelectCustomCourse(newCourse);
   };
 
   const generateAiFlashcards = async () => {
@@ -418,8 +514,12 @@ export default function App() {
     setTelemetry({ activeNode: 'Idle', remedialPathActive: false, retrievedContext: [] });
   };
 
+  const displayedCards = (activeChapterIndex !== null && chapters[activeChapterIndex]?.cards?.length > 0)
+    ? chapters[activeChapterIndex].cards
+    : cards;
+
   const nextFlashcard = () => {
-    if (cardIndex < cards.length - 1) {
+    if (cardIndex < displayedCards.length - 1) {
       setIsFlipped(false);
       setTimeout(() => setCardIndex(prev => prev + 1), 150);
     }
@@ -683,22 +783,29 @@ export default function App() {
 
   if (showLanding) {
     return (
-      <LandingPage 
-        onSignUp={() => setShowLanding(false)} 
-        onNavigateSubject={(subject) => {
-          setActiveSubject(subject);
-          setShowLanding(false);
-        }}
-        onNavigateTier={(tier) => {
-          setActiveTier(tier);
-          setShowLanding(false);
-        }}
-        onStartLearning={(subject, tier) => {
-          setActiveSubject(subject);
-          setActiveTier(tier);
-          setShowLanding(false);
-        }}
-      />
+      <>
+        <LandingPage 
+          onSignUp={() => setShowLanding(false)} 
+          onNavigateSubject={(subject) => {
+            handleResetToStandardCourse(subject, activeTier);
+            setShowLanding(false);
+          }}
+          onNavigateTier={(tier) => {
+            handleResetToStandardCourse(activeSubject, tier);
+            setShowLanding(false);
+          }}
+          onStartLearning={(subject, tier) => {
+            handleResetToStandardCourse(subject, tier);
+            setShowLanding(false);
+          }}
+          onOpenIngestion={() => setIsIngestionModalOpen(true)}
+        />
+        <MaterialIngestionModal
+          isOpen={isIngestionModalOpen}
+          onClose={() => setIsIngestionModalOpen(false)}
+          onIngestionSuccess={handleIngestionComplete}
+        />
+      </>
     );
   }
 
@@ -709,45 +816,134 @@ export default function App() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-purple-500/5 blur-[120px] pointer-events-none"></div>
 
       {/* TOP HEADER */}
-      <header className="w-full glass-panel border-b border-slate-900 px-4 sm:px-6 py-4 flex items-center justify-between gap-3 sticky top-0 z-50">
+      <header className="w-full glass-panel border-b border-slate-900 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4 sticky top-0 z-50">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="bg-gradient-to-tr from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-950/20 shrink-0">
-            <BrainCircuit className="w-6 h-6 text-white" />
+          <div 
+            onClick={() => setShowLanding(true)}
+            className="bg-gradient-to-tr from-blue-600 to-purple-600 p-2 rounded-xl shadow-lg shadow-purple-950/20 shrink-0 cursor-pointer hover:opacity-90 transition"
+            title="Return to Landing Page"
+          >
+            <BrainCircuit className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm md:text-md font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent whitespace-nowrap">AURA COGNITIVE COMPANION</h1>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest hidden md:block">Enterprise Educational System v2.1</p>
+            <h1 className="text-sm font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent whitespace-nowrap">
+              {activeCourseTitle || 'AURA LEARNING COMPANION'}
+            </h1>
+            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest hidden sm:block">
+              {selectedCourseId ? 'Custom Ingested Course' : `${activeSubject} • ${activeTier}`}
+            </p>
           </div>
         </div>
 
-        {/* Desktop / tablet controls */}
-        <div className="hidden md:flex items-center justify-end gap-4">
-          <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800">
-            {['Physics', 'Biology', 'Mathematics'].map(sub => (
-              <button 
-                key={sub} 
-                onClick={() => { setActiveSubject(sub); }} 
-                className={`text-xs px-4 py-1.5 rounded-lg font-semibold transition-all ${activeSubject === sub ? 'bg-slate-800 text-white shadow-sm border border-slate-700' : 'text-slate-400 hover:text-slate-200'}`}
-              >
-                {sub}
-              </button>
-            ))}
-          </div>
+        {/* PAGE NAVIGATION TABS (DESKTOP) */}
+        <div className="hidden lg:flex items-center bg-slate-900/80 p-1 rounded-xl border border-slate-800 shadow-inner">
+          <button
+            onClick={() => setActiveView('studio')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'studio'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Course Studio</span>
+          </button>
 
-          <div className="h-6 w-px bg-slate-800"></div>
+          <button
+            onClick={() => setActiveView('theory')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'theory'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Study Deck</span>
+          </button>
 
-          <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800">
-            {['Class 10', 'Class 11-12', 'Undergraduate'].map(tier => (
-              <button 
-                key={tier} 
-                onClick={() => { setActiveTier(tier); }} 
-                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1 ${activeTier === tier ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                <GraduationCap className="w-3.5 h-3.5" />
-                {tier}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => setActiveView('quiz')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'quiz'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>Practice Lab</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('final_exam')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'final_exam'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>Evaluation Exam</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('telemetry')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'telemetry'
+                ? 'bg-slate-800 text-purple-300 border border-purple-500/30 shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Telemetry</span>
+          </button>
+        </div>
+
+        {/* TOP RIGHT CONTROLS */}
+        <div className="hidden md:flex items-center justify-end gap-3">
+          {customCourses.length > 0 && (
+            <select
+              value={selectedCourseId || ''}
+              onChange={(e) => {
+                const cid = e.target.value;
+                if (!cid) {
+                  handleResetToStandardCourse(activeSubject, activeTier);
+                } else {
+                  const found = customCourses.find(c => c.course_id === cid);
+                  if (found) handleSelectCustomCourse(found);
+                }
+              }}
+              className="bg-slate-900 border border-purple-500/30 text-purple-300 text-xs px-3 py-1.5 rounded-xl focus:outline-none focus:border-purple-500 font-semibold"
+            >
+              <option value="">Default Standard Subjects</option>
+              {customCourses.map(c => (
+                <option key={c.course_id} value={c.course_id}>
+                  ⭐ {c.title} ({c.chapters_count || 1} Ch)
+                </option>
+              ))}
+            </select>
+          )}
+
+          {!selectedCourseId && (
+            <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800">
+              {['Physics', 'Biology', 'Mathematics'].map(sub => (
+                <button 
+                  key={sub} 
+                  onClick={() => { handleResetToStandardCourse(sub, activeTier); }} 
+                  className={`text-xs px-3 py-1 rounded-lg font-semibold transition-all ${activeSubject === sub ? 'bg-slate-800 text-white shadow-sm border border-slate-700' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setIsIngestionModalOpen(true)}
+            className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow-lg shadow-purple-950/40 transition-all flex items-center gap-1.5 border border-purple-400/30 active:scale-95"
+          >
+            <Plus className="w-3.5 h-3.5 text-yellow-300" />
+            <span>Ingest Material</span>
+          </button>
         </div>
 
         {/* Mobile hamburger button */}
@@ -755,7 +951,7 @@ export default function App() {
           type="button"
           onClick={() => setMobileHeaderOpen(o => !o)}
           aria-label={mobileHeaderOpen ? 'Close menu' : 'Open menu'}
-          className="md:hidden p-2 rounded-xl border border-slate-800 bg-slate-900/60 text-slate-300 hover:text-white hover:border-slate-600 transition-colors shrink-0"
+          className="lg:hidden p-2 rounded-xl border border-slate-800 bg-slate-900/60 text-slate-300 hover:text-white hover:border-slate-600 transition-colors shrink-0"
         >
           {mobileHeaderOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -763,699 +959,558 @@ export default function App() {
 
       {/* MOBILE DROPDOWN MENU */}
       {mobileHeaderOpen && (
-        <div className="md:hidden bg-slate-950/95 backdrop-blur-xl border-b border-slate-900 px-4 py-5 space-y-6 animate-fadeIn">
-          <div>
-            <h2 className="text-[10px] font-mono tracking-widest text-slate-500 uppercase px-2 mb-2 flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5" /> Subject
-            </h2>
-            <div className="grid grid-cols-3 gap-2">
-              {['Physics', 'Biology', 'Mathematics'].map(sub => (
-                <button 
-                  key={sub} 
-                  onClick={() => { setActiveSubject(sub); setMobileHeaderOpen(false); }} 
-                  className={`text-xs px-2 py-2.5 rounded-lg font-semibold transition-all ${activeSubject === sub ? 'bg-slate-800 text-white shadow-sm border border-slate-600' : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'}`}
-                >
-                  {sub}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-[10px] font-mono tracking-widest text-slate-500 uppercase px-2 mb-2 flex items-center gap-2">
-              <GraduationCap className="w-3.5 h-3.5" /> Class / Level
-            </h2>
-            <div className="space-y-2">
-              {['Class 10', 'Class 11-12', 'Undergraduate'].map(tier => (
-                <button 
-                  key={tier} 
-                  onClick={() => { setActiveTier(tier); setMobileHeaderOpen(false); }} 
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border ${activeTier === tier ? 'bg-slate-800 text-white border-slate-600' : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border-slate-800'}`}
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  {tier}
-                  {activeTier === tier && <span className="ml-auto text-[10px] text-emerald-400">Active</span>}
-                </button>
-              ))}
-            </div>
+        <div className="lg:hidden bg-slate-950/95 backdrop-blur-xl border-b border-slate-900 px-4 py-5 space-y-4 animate-fadeIn">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => { setActiveView('studio'); setMobileHeaderOpen(false); }}
+              className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+                activeView === 'studio' ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800'
+              }`}
+            >
+              <Layers className="w-4 h-4" /> Course Studio
+            </button>
+            <button
+              onClick={() => { setActiveView('theory'); setMobileHeaderOpen(false); }}
+              className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+                activeView === 'theory' ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" /> Study Deck
+            </button>
+            <button
+              onClick={() => { setActiveView('quiz'); setMobileHeaderOpen(false); }}
+              className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+                activeView === 'quiz' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-900 text-slate-300 border-slate-800'
+              }`}
+            >
+              <HelpCircle className="w-4 h-4" /> Practice Lab
+            </button>
+            <button
+              onClick={() => { setActiveView('final_exam'); setMobileHeaderOpen(false); }}
+              className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+                activeView === 'final_exam' ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-900 text-slate-300 border-slate-800'
+              }`}
+            >
+              <Bookmark className="w-4 h-4" /> Final Exam
+            </button>
+            <button
+              onClick={() => { setActiveView('telemetry'); setMobileHeaderOpen(false); }}
+              className={`col-span-2 p-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border ${
+                activeView === 'telemetry' ? 'bg-slate-800 text-purple-300 border-purple-500' : 'bg-slate-900 text-slate-300 border-slate-800'
+              }`}
+            >
+              <Activity className="w-4 h-4" /> Glass-Box Telemetry
+            </button>
           </div>
         </div>
       )}
 
-      {/* DASHBOARD MAIN LAYOUT */}
-      <div className="flex-1 max-w-[1600px] w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* MULTI-PAGE VIEW CONTAINER */}
+      <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-8 py-6">
         
-        {/* LEFT NAV PANEL - TABS SELECTOR */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="glass-panel rounded-2xl p-4 space-y-2 glow-blue">
-            <h2 className="text-[10px] font-mono tracking-widest text-slate-500 uppercase px-2 mb-2">Workspace Modes</h2>
-            
-            <button 
-              onClick={() => setActiveView('theory')} 
-              className={`w-full flex items-center justify-between p-3 rounded-xl transition-all border ${activeView === 'theory' ? activeColor.bg + ' ' + activeColor.border + ' ' + activeColor.text : 'border-transparent text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'}`}
-            >
-              <div className="flex items-center gap-3">
-                <BookOpen className="w-4 h-4" />
-                <span className="text-xs font-semibold">Study Deck</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
-            </button>
+        {/* PAGE 1: COURSE STUDIO & INGESTION */}
+        {activeView === 'studio' && (
+          <CourseStudioView
+            courses={allCourses}
+            activeCourseId={selectedCourseId}
+            onSelectCourse={handleSelectCustomCourse}
+            onDeleteCourse={handleDeleteCourse}
+            onCourseCreated={handleIngestionComplete}
+            onNavigateToStudy={() => setActiveView('theory')}
+            onNavigateToPractice={() => setActiveView('quiz')}
+            activeColor={activeSubject === 'Biology' ? 'emerald' : activeSubject === 'Mathematics' ? 'purple' : 'blue'}
+          />
+        )}
 
-            <button 
-              onClick={() => setActiveView('quiz')} 
-              className={`w-full flex items-center justify-between p-3 rounded-xl transition-all border ${activeView === 'quiz' ? activeColor.bg + ' ' + activeColor.border + ' ' + activeColor.text : 'border-transparent text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'}`}
-              disabled={quizzes.length === 0}
-            >
-              <div className="flex items-center gap-3">
-                <HelpCircle className="w-4 h-4" />
-                <span className="text-xs font-semibold">Practice Lab</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
-            </button>
+        {/* PAGE 2: STUDY DECK & FLASHCARDS */}
+        {activeView === 'theory' && (
+          <div className="space-y-6 max-w-5xl mx-auto animate-fadeIn">
+            {/* CHAPTER NAVIGATION BAR */}
+            {chapters.length > 1 && (
+              <ChapterNav
+                chapters={chapters}
+                activeChapterIndex={activeChapterIndex}
+                onSelectChapter={(idx) => {
+                  setActiveChapterIndex(idx);
+                  setCardIndex(0);
+                  setIsFlipped(false);
+                }}
+                activeColor={activeSubject === 'Biology' ? 'emerald' : activeSubject === 'Mathematics' ? 'purple' : 'blue'}
+              />
+            )}
 
-            <button 
-              onClick={() => setActiveView('final_exam')} 
-              className={`w-full flex items-center justify-between p-3 rounded-xl transition-all border ${activeView === 'final_exam' ? activeColor.bg + ' ' + activeColor.border + ' ' + activeColor.text : 'border-transparent text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'}`}
-              disabled={finalExams.length === 0}
-            >
-              <div className="flex items-center gap-3">
-                <Bookmark className="w-4 h-4" />
-                <span className="text-xs font-semibold">Threshold Exam</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
-            </button>
-          </div>
+            {/* Main Flashcard Card Deck */}
+            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
+              <div className="flex flex-wrap justify-between items-center pb-4 border-b border-slate-800/80 gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-purple-500/20 rounded-xl text-purple-400 border border-purple-500/30">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">
+                      {activeChapterIndex !== null && chapters[activeChapterIndex] 
+                        ? `${chapters[activeChapterIndex].title} — Flashcards` 
+                        : `${activeCourseTitle || 'Core Course'} — Flashcard Deck`}
+                    </h3>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Card {displayedCards.length > 0 ? Math.min(cardIndex + 1, displayedCards.length) : 0} of {displayedCards.length}
+                    </span>
+                  </div>
+                </div>
 
-          {/* ACTIVE STATUS DETAIL */}
-          <div className="glass-panel rounded-2xl p-4 space-y-4 border border-slate-900 text-xs">
-            <h3 className="text-[10px] font-mono tracking-widest text-slate-500 uppercase">Context Metadata</h3>
-            <div className="space-y-2.5">
-              <div className="flex justify-between items-center py-1 border-b border-slate-900/60">
-                <span className="text-slate-500">Subject</span>
-                <span className="font-semibold text-slate-300">{activeSubject}</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={generateAiFlashcards}
+                    disabled={isGeneratingCards}
+                    className="bg-slate-900 border border-purple-500/30 hover:border-purple-500/60 text-purple-300 text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isGeneratingCards ? (
+                      <>
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-purple-400/30 border-t-purple-400 animate-spin" />
+                        <span>Regenerating RAG...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                        <span>Regenerate AI Cards</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveView('quiz')}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg shadow-emerald-950/40 transition flex items-center gap-1.5"
+                  >
+                    <span>Practice Lab</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-900/60">
-                <span className="text-slate-500">Academic Tier</span>
-                <span className="font-semibold text-slate-300">{activeTier}</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-900/60">
-                <span className="text-slate-500">Chroma RAG status</span>
-                <span className="text-emerald-400 font-mono font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Active
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* CENTER INTERACTION PANEL */}
-        <div className="lg:col-span-6 glass-panel rounded-2xl p-6 glow-purple border border-slate-900 min-h-[600px] flex flex-col justify-between">
-          
-          {loading ? (
-            <div className="flex-1 flex flex-col justify-center items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-slate-800 border-t-purple-500 animate-spin"></div>
-              <span className="text-xs text-slate-500 font-mono uppercase tracking-widest">Accessing Brain Nodes...</span>
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col justify-between">
-              
-              {/* STUDY DECK VIEW */}
-              {activeView === 'theory' && (
-                <div className="flex-1 flex flex-col justify-between h-full space-y-4">
-                  
-                  {/* TOP CONTROL BAR */}
-                  <div className="flex flex-wrap justify-between items-center border-b border-slate-900/80 pb-3 gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                        <BookOpen className="w-4 h-4 text-purple-400" />
-                        Textbook Study Guides
-                      </span>
-                      {isAiGeneratedCards && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-950/60 border border-purple-500/40 text-purple-300 flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
-                          RAG AI Generated (3 Cards) {isCardsCached && <span className="text-emerald-400 font-bold ml-1">• Cached</span>}
+              {/* 3D PERSPECTIVE FLIP CARD CONTAINER */}
+              {displayedCards.length > 0 ? (
+                <div className="flex flex-col items-center justify-center py-6">
+                  <div 
+                    onClick={() => setIsFlipped(!isFlipped)} 
+                    className="flip-card w-full max-w-[580px] h-[340px] cursor-pointer group"
+                  >
+                    <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
+                      
+                      {/* FRONT SIDE */}
+                      <div className="flip-card-front bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/40 border border-purple-900/40 hover:border-purple-500/60 p-8 flex flex-col justify-between items-center text-center shadow-2xl rounded-3xl relative overflow-hidden transition-all duration-300">
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-inner">
+                          {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.topic}
                         </span>
+                        <p className="text-lg font-semibold leading-relaxed text-slate-100 max-w-[460px]">
+                          {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.question}
+                        </p>
+                        <span className="text-xs text-purple-300/80 flex items-center gap-1.5 font-medium group-hover:text-purple-300 transition-colors">
+                          <Sparkles className="w-4 h-4 text-yellow-400 animate-bounce" />
+                          Click anywhere to Flip Card
+                        </span>
+                      </div>
+
+                      {/* BACK SIDE */}
+                      <div className="flip-card-back bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-900/50 p-8 flex flex-col justify-between items-start text-left shadow-2xl rounded-3xl overflow-y-auto custom-scrollbar relative">
+                        <div className="flex justify-between items-center w-full border-b border-indigo-900/40 pb-3">
+                          <span className="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4 text-indigo-400" />
+                            Theoretical Synthesis
+                          </span>
+                          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/40">
+                            {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.topic}
+                          </span>
+                        </div>
+                        <div className="flex-1 w-full my-4 text-xs sm:text-sm text-slate-200 font-mono leading-relaxed whitespace-pre-wrap">
+                          {displayedCards[Math.min(cardIndex, displayedCards.length - 1)]?.answer}
+                        </div>
+                        <span className="text-xs text-indigo-300/70 font-medium">Click to flip back</span>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Card Navigation Controls */}
+                  <div className="flex items-center justify-between w-full max-w-[580px] mt-6 pt-4 border-t border-slate-800/80">
+                    <button 
+                      onClick={prevFlashcard} 
+                      disabled={cardIndex === 0} 
+                      className="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all shadow"
+                    >
+                      ← Previous Card
+                    </button>
+                    <button 
+                      onClick={nextFlashcard} 
+                      disabled={cardIndex >= displayedCards.length - 1} 
+                      className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-xl text-xs font-bold text-white disabled:opacity-30 disabled:pointer-events-none transition-all shadow-lg shadow-purple-950/40"
+                    >
+                      Next Card →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-16 text-center text-slate-500 text-xs">
+                  <BookOpen className="w-10 h-10 mb-2 opacity-30 text-purple-400 mx-auto" />
+                  No study flashcards available for this section.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PAGE 3: PRACTICE & SOCRATIC LAB */}
+        {activeView === 'quiz' && (
+          <div className="space-y-6 max-w-5xl mx-auto animate-fadeIn">
+            {currentQuestion ? (
+              <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-5">
+                {/* Header */}
+                <div className="border-b border-slate-800 pb-4 flex justify-between items-center flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-emerald-500/20 rounded-xl text-emerald-400 border border-emerald-500/30">
+                      <HelpCircle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Interactive Socratic Practice Lab</h3>
+                      <span className="text-[11px] text-emerald-400 font-mono">Concept: {currentQuestion.concept}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {mockErrors >= 2 && (
+                      <span className="text-[10px] font-mono text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full bg-amber-950/60 flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-amber-400 animate-pulse" />
+                        Direct Solution Threshold Active
+                      </span>
+                    )}
+                    <span className="text-[10px] font-mono text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full bg-emerald-500/10 flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
+                      Adaptive Depth Socratic Tutor
+                    </span>
+                  </div>
+                </div>
+
+                {/* Concept Question Banner */}
+                <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/30 border border-slate-800 p-5 rounded-2xl border-l-4 border-l-emerald-500 shadow-lg">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block mb-1 font-bold">
+                    Active Problem Statement
+                  </span>
+                  <p className="text-sm text-slate-100 font-semibold leading-relaxed">{currentQuestion.text}</p>
+                </div>
+
+                {/* Conversation Log */}
+                <div className="h-[360px] overflow-y-auto space-y-4 custom-scrollbar p-3 bg-slate-950/60 rounded-2xl border border-slate-900">
+                  {chatLog.length === 0 ? (
+                    <div className="text-slate-400 text-xs text-center pt-24 space-y-2">
+                      <p className="font-semibold text-slate-300">Ask a question, propose a solution, or test your intuition...</p>
+                      <p className="text-[11px] text-slate-600 font-mono">
+                        The tutor adapts to surface intuition, mathematical steps, or remedial guidance based on your responses.
+                      </p>
+                    </div>
+                  ) : (
+                    chatLog.map((chat, idx) => (
+                      <div key={idx} className={`flex w-full ${chat.sender === 'student' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] text-xs p-4 rounded-2xl border shadow-lg ${
+                          chat.sender === 'student' 
+                            ? 'bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border-blue-500/30 text-blue-100 rounded-br-none' 
+                            : 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/30 border-slate-800 text-slate-200 rounded-bl-none'
+                        }`}>
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-2 mb-2">
+                            <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest">
+                              {chat.sender === 'student' ? 'Student Input' : 'Socratic Tutor Response'}
+                            </span>
+                            {chat.sender !== 'student' && (
+                              <span className={`text-[9px] font-mono px-2.5 py-0.5 rounded-full border ${
+                                chat.depth === 'deep' 
+                                  ? 'bg-purple-950/60 border-purple-500/40 text-purple-300'
+                                  : chat.depth === 'remedial'
+                                  ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                                  : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                              }`}>
+                                {chat.depth === 'deep' ? '🔮 Deep Inquiry' : chat.depth === 'remedial' ? '⚡ Direct Solution' : '🌱 Concept Guide'}
+                              </span>
+                            )}
+                          </div>
+                          <HintMarkdown text={chat.text} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Quick Inquiry Chips */}
+                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 text-xs font-mono">
+                  <span className="text-slate-500 text-[11px] whitespace-nowrap">Suggested Prompts:</span>
+                  <button
+                    onClick={() => submitQuizAnswer("Explain the core intuitive concept simply with a real-world example.")}
+                    disabled={loading}
+                    className="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 py-1.5 rounded-full text-emerald-300 whitespace-nowrap transition"
+                  >
+                    💡 Intuitive Example
+                  </button>
+                  <button
+                    onClick={() => submitQuizAnswer("Show the step-by-step formula derivation and mathematical relationship.")}
+                    disabled={loading}
+                    className="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 py-1.5 rounded-full text-purple-300 whitespace-nowrap transition"
+                  >
+                    🔮 Formula Steps
+                  </button>
+                  <button
+                    onClick={() => submitQuizAnswer("give me the answer please and show full solution")}
+                    disabled={loading}
+                    className="bg-amber-950/80 hover:bg-amber-900/80 border border-amber-500/40 px-3 py-1.5 rounded-full text-amber-300 whitespace-nowrap transition"
+                  >
+                    ⚡ Request Direct Solution
+                  </button>
+                </div>
+
+                {/* Chat Input */}
+                <div className="pt-2 flex gap-3">
+                  <input 
+                    type="text" 
+                    value={studentAnswer} 
+                    onChange={(e) => setStudentAnswer(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && submitQuizAnswer()} 
+                    placeholder="Type your question or answer here..." 
+                    disabled={loading}
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition font-mono placeholder:text-slate-600"
+                  />
+                  <button 
+                    onClick={() => submitQuizAnswer()} 
+                    disabled={loading || !studentAnswer.trim()}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-6 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/40 transition disabled:opacity-40 flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <span>Submit</span>
+                        <Send className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="glass-panel p-16 text-center rounded-3xl border border-slate-800 text-slate-500 text-xs">
+                No Practice Quiz items available for this course.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PAGE 4: THRESHOLD FINAL EVALUATION EXAM */}
+        {activeView === 'final_exam' && (
+          <div className="space-y-6 max-w-5xl mx-auto animate-fadeIn">
+            {finalExams.length > 0 ? (
+              <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
+                {!examReport ? (
+                  <div className="space-y-6">
+                    {/* Header */}
+                    <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-blue-500/20 rounded-xl text-blue-400 border border-blue-500/30">
+                          <Bookmark className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Threshold Final Evaluation</h3>
+                          <span className="text-[11px] text-purple-400 font-mono font-semibold">
+                            {finalExams[activeExamQuestionIndex]?.moduleOrigin}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs font-mono">
+                        <span className="text-slate-400">Question {activeExamQuestionIndex + 1} of {finalExams.length}</span>
+                        <span className="text-slate-300 font-bold flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+                          <Clock className="w-4 h-4 text-blue-400 animate-pulse" />
+                          {Math.floor(questionTimer / 60)}:{String(questionTimer % 60).padStart(2, '0')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Question Statement */}
+                    <div className="bg-slate-950 p-6 rounded-2xl border border-slate-850 space-y-4">
+                      <p className="text-sm font-semibold leading-relaxed text-slate-100">
+                        {finalExams[activeExamQuestionIndex]?.text}
+                      </p>
+                      
+                      <div className="h-px bg-slate-900" />
+
+                      <input 
+                        type="text" 
+                        value={examTextInputs[finalExams[activeExamQuestionIndex].qId] || ""} 
+                        onChange={(e) => setExamTextInputs(p => ({ ...p, [finalExams[activeExamQuestionIndex].qId]: e.target.value }))} 
+                        disabled={lastQuestionEvaluated || loading} 
+                        placeholder="Type your final answer here..." 
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition font-mono"
+                      />
+                    </div>
+
+                    {/* Feedback & Actions */}
+                    <div className="pt-2 flex justify-between items-center">
+                      <div>
+                        {lastQuestionEvaluated && !isQuestionPassed && (
+                          <span className="text-xs font-mono text-rose-400 flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                            Incorrect. Click Retake or view hint to retry.
+                          </span>
+                        )}
+                        {lastQuestionEvaluated && isQuestionPassed && (
+                          <span className="text-xs font-mono text-emerald-400 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            Correct answer verified!
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3">
+                        {lastQuestionEvaluated && !isQuestionPassed && (
+                          <button 
+                            onClick={triggerRetakeAttemptLoop} 
+                            className="bg-amber-600/20 border border-amber-500/30 text-amber-300 px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition"
+                          >
+                            Retake Question
+                          </button>
+                        )}
+                        {lastQuestionEvaluated ? (
+                          <button 
+                            onClick={forceAdvanceNextItem} 
+                            className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition flex items-center gap-1.5 shadow-lg shadow-purple-950/40"
+                          >
+                            <span>Next Question</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={handleShortAnswerEvaluation} 
+                            disabled={loading || !(examTextInputs[finalExams[activeExamQuestionIndex].qId] || "").trim()} 
+                            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-blue-950/40 transition disabled:opacity-40"
+                          >
+                            Verify & Submit Item
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* EXAM COMPLETED REPORT SCREEN */
+                  <div className="bg-slate-950 p-8 rounded-3xl border border-slate-850 space-y-6 text-center relative overflow-hidden">
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-mono text-slate-500 uppercase tracking-widest">Final Assessment Complete</h3>
+                      <p className="text-2xl font-extrabold text-slate-100">{activeCourseTitle || activeSubject} Scorecard</p>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center gap-2 py-4">
+                      <div className="w-28 h-28 rounded-full border-4 border-slate-800 flex flex-col items-center justify-center bg-slate-900 shadow-2xl">
+                        <span className="text-3xl font-black bg-gradient-to-tr from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                          {examReport.calculated_score}%
+                        </span>
+                      </div>
+                      <span className="bg-purple-950 border border-purple-800 text-purple-300 text-xs font-black uppercase px-4 py-1.5 rounded-full shadow">
+                        {examReport.rating_tier}
+                      </span>
+                    </div>
+
+                    <div className="text-left space-y-4 max-w-2xl mx-auto">
+                      <div className="bg-slate-900/60 p-5 rounded-2xl border border-slate-800 space-y-2">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Academic Mentor Remarks</span>
+                        <p className="text-xs text-slate-300 leading-relaxed">{examReport.mentor_remark}</p>
+                      </div>
+
+                      {examReport.remediation_hint && (
+                        <div className="bg-slate-900/60 p-5 rounded-2xl border border-purple-500/30 text-xs space-y-2">
+                          <span className="text-[10px] font-mono text-purple-400 uppercase tracking-wider font-bold">Personalized Remediation Plan</span>
+                          <HintMarkdown text={examReport.remediation_hint} />
+                        </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className="text-[11px] font-mono text-slate-400 bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-900">
-                        Card {cards.length > 0 ? cardIndex + 1 : 0} of {cards.length}
-                      </span>
-                      
+                    <div className="pt-4">
                       <button
-                        onClick={generateAiFlashcards}
-                        disabled={isGeneratingCards}
-                        className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl shadow-lg shadow-purple-950/50 hover:shadow-purple-900/60 transition-all flex items-center gap-1.5 disabled:opacity-50 border border-purple-400/30"
+                        onClick={() => { clearSessions(); setActiveView('theory'); }}
+                        className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-xs font-bold rounded-xl shadow-lg transition"
                       >
-                        {isGeneratingCards ? (
-                          <>
-                            <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                            <span>Generating RAG...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                            <span>Generate AI Flashcards</span>
-                          </>
-                        )}
+                        Return to Study Deck
                       </button>
                     </div>
                   </div>
-
-                  {/* 3D PERSPECTIVE FLIP CARD CONTAINER */}
-                  {cards.length > 0 ? (
-                    <>
-                      <div className="flex-1 flex items-center justify-center py-2">
-                        <div 
-                          onClick={() => setIsFlipped(!isFlipped)} 
-                          className="flip-card w-full max-w-[480px] h-[310px] cursor-pointer group"
-                        >
-                          <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
-                            
-                            {/* FRONT SIDE */}
-                            <div className="flip-card-front bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/40 border border-purple-900/30 hover:border-purple-500/50 p-6 flex flex-col justify-between items-center text-center shadow-2xl rounded-2xl relative overflow-hidden transition-all duration-300">
-                              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
-                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-inner">
-                                {cards[cardIndex]?.topic}
-                              </span>
-                              <p className="text-base font-semibold leading-relaxed text-slate-100 max-w-[380px]">
-                                {cards[cardIndex]?.question}
-                              </p>
-                              <span className="text-[11px] text-purple-300/70 flex items-center gap-1.5 font-medium group-hover:text-purple-300 transition-colors">
-                                <Sparkles className="w-3.5 h-3.5 text-yellow-400 animate-bounce" />
-                                Click to Flip Card
-                              </span>
-                            </div>
-
-                            {/* BACK SIDE */}
-                            <div className="flip-card-back bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-900/40 p-6 flex flex-col justify-between items-start text-left shadow-2xl rounded-2xl overflow-y-auto custom-scrollbar relative">
-                              <div className="flex justify-between items-center w-full border-b border-indigo-900/30 pb-2">
-                                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
-                                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                                  Conceptual Breakdown
-                                </span>
-                                <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40">
-                                  {cards[cardIndex]?.topic}
-                                </span>
-                              </div>
-                              <div className="flex-1 w-full mt-3 text-xs text-slate-200 font-mono leading-relaxed whitespace-pre-wrap">
-                                {cards[cardIndex]?.answer}
-                              </div>
-                              <span className="text-[10px] text-indigo-300/70 mt-2 font-medium">
-                                Click to return
-                              </span>
-                            </div>
-
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* CARD NAVIGATION */}
-                      <div className="flex justify-between items-center border-t border-slate-900/80 pt-3">
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={prevFlashcard} 
-                            disabled={cardIndex === 0} 
-                            className="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all shadow"
-                          >
-                            Previous
-                          </button>
-                          <button 
-                            onClick={nextFlashcard} 
-                            disabled={cardIndex === cards.length - 1} 
-                            className="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all shadow"
-                          >
-                            Next Card
-                          </button>
-                        </div>
-                        <button 
-                          onClick={() => { clearSessions(); setActiveView('final_exam'); }} 
-                          className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-950/40 transition-all flex items-center gap-1.5"
-                          disabled={finalExams.length === 0}
-                        >
-                          Skip to Exam
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs py-10">
-                      <BookOpen className="w-8 h-8 mb-2 opacity-30 text-purple-400" />
-                      No study guides loaded for this tier.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* PRACTICE LAB (INTERACTIVE DISCUSSION & INQUIRY LAB) */}
-              {activeView === 'quiz' && (
-                <div className="flex-1 flex flex-col justify-between h-full space-y-3">
-                  {currentQuestion ? (
-                    <>
-                      {/* HEADER BAR WITH THRESHOLD BADGES */}
-                      <div className="border-b border-slate-900 pb-3 flex justify-between items-center flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4 text-emerald-400" />
-                          <span className="text-xs text-slate-300 font-bold uppercase tracking-wider">
-                            Discussion & Inquiry Lab: <span className="text-emerald-400 font-mono">{currentQuestion.concept}</span>
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {mockErrors >= 2 && (
-                            <span className="text-[10px] font-mono text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full bg-amber-950/60 flex items-center gap-1">
-                              <Zap className="w-3 h-3 text-amber-400 animate-pulse" />
-                              Solution Threshold Unlocked (2+ Attempts)
-                            </span>
-                          )}
-                          <span className="text-[10px] font-mono text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-500/10 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
-                            Adaptive Depth AI Tutor
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* CONCEPT QUESTION CARD */}
-                      <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/30 border border-slate-800 p-4 rounded-xl border-l-4 border-l-emerald-500/80 shadow-md">
-                        <span className="text-[9px] font-mono uppercase tracking-widest text-emerald-400 block mb-1 font-bold">
-                          Current Focus Concept
-                        </span>
-                        <p className="text-xs text-slate-100 font-semibold leading-relaxed">{currentQuestion.text}</p>
-                      </div>
-
-                      {/* CHAT LOGS AREA */}
-                      <div className="flex-1 max-h-[290px] overflow-y-auto space-y-3.5 custom-scrollbar my-2 pr-1 min-h-[220px]">
-                        {chatLog.length === 0 ? (
-                          <div className="text-slate-400 italic text-[11px] text-center pt-8 space-y-2">
-                            <p>Ask any question, test your intuition, or request a deeper breakdown...</p>
-                            <p className="text-[10px] text-slate-600 font-mono">
-                              💡 Solution Threshold Rule: Direct solution is unlocked if requested or after 2 failed attempts!
-                            </p>
-                          </div>
-                        ) : (
-                          chatLog.map((chat, idx) => (
-                            <div key={idx} className={`flex w-full ${chat.sender === 'student' ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[88%] text-xs p-3.5 rounded-2xl border shadow-lg ${
-                                chat.sender === 'student' 
-                                  ? 'bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border-blue-500/30 text-blue-100 rounded-br-none' 
-                                  : 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/30 border-slate-800 text-slate-200 rounded-bl-none'
-                              }`}>
-                                <div className="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-1.5 mb-2">
-                                  <span className="text-[9px] font-mono text-slate-400 font-bold uppercase tracking-widest">
-                                    {chat.sender === 'student' ? 'Student Inquiry' : 'AI Discussion Mentor'}
-                                  </span>
-                                  
-                                  {chat.sender !== 'student' && (
-                                    <span className={`text-[8px] font-mono px-2 py-0.5 rounded-full border ${
-                                      chat.depth === 'deep' 
-                                        ? 'bg-purple-950/60 border-purple-500/40 text-purple-300'
-                                        : chat.depth === 'remedial'
-                                        ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
-                                        : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-                                    }`}>
-                                      {chat.depth === 'deep' ? '🔮 Deep Inquiry' : chat.depth === 'remedial' ? '⚡ Direct Solution' : '🌱 Concept Guide'}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="leading-relaxed font-normal text-slate-200">
-                                  <HintMarkdown text={chat.text} />
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      {/* QUICK INQUIRY PROMPT CHIPS */}
-                      <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 text-[10px] font-mono">
-                        <span className="text-slate-500 whitespace-nowrap">Suggested Queries:</span>
-                        <button
-                          onClick={() => submitQuizAnswer("Explain the core intuitive concept simply with a real-world example.")}
-                          disabled={loading}
-                          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-full text-emerald-300 whitespace-nowrap transition-all"
-                        >
-                          💡 Core Intuition
-                        </button>
-                        <button
-                          onClick={() => submitQuizAnswer("Show the step-by-step formula derivation and mathematical relationship.")}
-                          disabled={loading}
-                          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-full text-purple-300 whitespace-nowrap transition-all"
-                        >
-                          🔮 Mathematical Steps
-                        </button>
-                        <button
-                          onClick={() => submitQuizAnswer("give me the answer please and show full solution")}
-                          disabled={loading}
-                          className="bg-amber-950/80 hover:bg-amber-900/80 border border-amber-500/40 px-2.5 py-1 rounded-full text-amber-300 whitespace-nowrap transition-all flex items-center gap-1"
-                        >
-                          ⚡ Unlock Full Solution (Threshold)
-                        </button>
-                      </div>
-
-                      {/* CHAT INPUT PANEL */}
-                      <div className="border-t border-slate-900/80 pt-3 flex gap-2">
-                        <input 
-                          type="text" 
-                          value={studentAnswer} 
-                          onChange={(e) => setStudentAnswer(e.target.value)} 
-                          onKeyDown={(e) => e.key === 'Enter' && submitQuizAnswer()} 
-                          placeholder="Ask a question, test an answer, or request deeper derivations..." 
-                          disabled={loading}
-                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-mono placeholder:text-slate-600"
-                        />
-                        <button 
-                          onClick={() => submitQuizAnswer()} 
-                          disabled={loading || !studentAnswer.trim()}
-                          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/40 transition-all disabled:opacity-40 flex items-center gap-1.5"
-                        >
-                          {loading ? (
-                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <>
-                              <span>Send</span>
-                              <Send className="w-3 h-3" />
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs py-10">
-                      <HelpCircle className="w-8 h-8 mb-2 opacity-30 text-emerald-400" />
-                      No Practice Quizzes available.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* THRESHOLD FINAL EXAM VIEW */}
-              {activeView === 'final_exam' && (
-                <div className="flex-1 flex flex-col justify-between h-full">
-                  {finalExams.length > 0 ? (
-                    <>
-                      {!examReport ? (
-                        <div className="space-y-4 flex-1 flex flex-col justify-between">
-                          
-                          <div>
-                            {/* HEADER STATS */}
-                            <div className="flex justify-between items-center border-b border-slate-900 pb-3 mb-4">
-                              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                                <Bookmark className="w-4 h-4 text-purple-400" />
-                                Threshold evaluation
-                              </span>
-                              
-                              <div className="flex items-center gap-3 text-xs font-mono">
-                                <span className="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-purple-400 font-bold uppercase text-[10px]">
-                                  {finalExams[activeExamQuestionIndex]?.moduleOrigin}
-                                </span>
-                                <span className="text-slate-500">Attempt: {currentAttemptsCount}</span>
-                                <span className="text-slate-300 font-bold flex items-center gap-1 text-[11px] bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
-                                  <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                                  {Math.floor(questionTimer / 60)}:{String(questionTimer % 60).padStart(2, '0')}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* QUESTION EXPOSITION */}
-                            <div className="bg-slate-950 border border-slate-850 p-5 rounded-2xl shadow-sm space-y-4">
-                              <p className="text-xs font-semibold leading-relaxed text-slate-200">
-                                {finalExams[activeExamQuestionIndex]?.text}
-                              </p>
-                              
-                              <div className="h-px bg-slate-900"></div>
-
-                              <input 
-                                type="text" 
-                                value={examTextInputs[finalExams[activeExamQuestionIndex].qId] || ""} 
-                                onChange={(e) => setExamTextInputs(p => ({ ...p, [finalExams[activeExamQuestionIndex].qId]: e.target.value }))} 
-                                disabled={lastQuestionEvaluated || loading} 
-                                placeholder="Input literal fill-in-the-blank answer..." 
-                                className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700/60 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-all font-mono shadow-inner"
-                              />
-                            </div>
-                          </div>
-
-                          {/* FEEDBACK & CONTROLS FOOTER */}
-                          <div className="pt-4 border-t border-slate-900 flex justify-between items-center mt-6">
-                            <div className="flex-1">
-                              {lastQuestionEvaluated && !isQuestionPassed && (
-                                <span className="text-xs font-mono text-rose-400 flex items-center gap-1.5 animate-bounce">
-                                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                                  Deficiency identified. Tap side button to review hint.
-                                </span>
-                              )}
-                              {lastQuestionEvaluated && isQuestionPassed && (
-                                <span className="text-xs font-mono text-emerald-400 flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                                  Correct answer logic verified.
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex gap-2">
-                              {lastQuestionEvaluated && !isQuestionPassed && (
-                                <button 
-                                  onClick={triggerRetakeAttemptLoop} 
-                                  className="bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 text-amber-400 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-                                >
-                                  Retake
-                                </button>
-                              )}
-                              {lastQuestionEvaluated ? (
-                                <button 
-                                  onClick={forceAdvanceNextItem} 
-                                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1"
-                                >
-                                  Next Question
-                                  <ChevronRight className="w-4 h-4" />
-                                </button>
-                              ) : (
-                                <button 
-                                  onClick={handleShortAnswerEvaluation} 
-                                  disabled={loading || !(examTextInputs[finalExams[activeExamQuestionIndex].qId] || "").trim()} 
-                                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md"
-                                >
-                                  Verify
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                        </div>
-                      ) : (
-                        
-                        /* EXAM COMPLETED REPORT SCREEN */
-                        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-850 space-y-6 text-center shadow-lg relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-full h-[5px] bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></div>
-                          
-                          <div className="space-y-1">
-                            <h3 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Threshold Assessment Complete</h3>
-                            <p className="text-lg font-extrabold text-slate-100">{activeSubject} Final Scorecard</p>
-                          </div>
-
-                          <div className="flex flex-col items-center justify-center gap-2 py-4">
-                            <div className="w-24 h-24 rounded-full border-4 border-slate-800 flex flex-col items-center justify-center bg-slate-900">
-                              <span className="text-2xl font-black bg-gradient-to-tr from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                                {examReport.calculated_score}%
-                              </span>
-                            </div>
-                            <span className="bg-purple-950 border border-purple-800 text-purple-300 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow">
-                              {examReport.rating_tier}
-                            </span>
-                          </div>
-
-                          <div className="text-left space-y-4">
-                            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-850/50 space-y-1.5">
-                              <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">Academic Mentor Remarks</span>
-                              <p className="text-xs text-slate-300 leading-relaxed">{examReport.mentor_remark}</p>
-                            </div>
-
-                            {examReport.remediation_hint && (
-                              <div className={`p-4 rounded-xl border text-xs space-y-2 relative overflow-hidden bg-slate-900/60 transition-all ${
-                                examReport.rating_tier === 'High Mastery'      ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]' :
-                                examReport.rating_tier === 'Moderate Mastery'  ? 'border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.05)]' :
-                                examReport.rating_tier === 'Developing'        ? 'border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.05)]' :
-                                                                                'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]'
-                              }`}>
-                                <div className="flex items-center justify-between border-b border-slate-850 pb-2 mb-1">
-                                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                                    <Sparkles className={`w-3.5 h-3.5 ${
-                                      examReport.rating_tier === 'High Mastery'      ? 'text-emerald-400' :
-                                      examReport.rating_tier === 'Moderate Mastery'  ? 'text-blue-400' :
-                                      examReport.rating_tier === 'Developing'        ? 'text-yellow-400' :
-                                                                                      'text-rose-400'
-                                    }`} />
-                                    Fuzzy-Calibrated Remediation Hint
-                                  </span>
-                                  <span className="text-[8px] font-mono text-slate-500">
-                                    {examReport.rating_tier === 'High Mastery'      ? 'Level 4: Advanced Challenge' :
-                                     examReport.rating_tier === 'Moderate Mastery'  ? 'Level 3: Calibration' :
-                                     examReport.rating_tier === 'Developing'        ? 'Level 2: Socratic Study' :
-                                                                                    'Level 1: Deep Walkthrough'}
-                                  </span>
-                                </div>
-                                <HintMarkdown
-                                  text={examReport.remediation_hint}
-                                  className="text-slate-300 font-normal text-[11px] select-text"
-                                />
-                              </div>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-850/30 text-xs">
-                                <span className="text-slate-500 block mb-1">Pathway taken</span>
-                                <span className="font-semibold text-slate-300 text-[11px] block">{examReport.growth_metrics.pathway_taken}</span>
-                              </div>
-                              <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-850/30 text-xs">
-                                <span className="text-slate-500 block mb-1">Growth factor</span>
-                                <span className="font-bold text-emerald-400 text-sm">+{examReport.growth_metrics.score_delta_pct}% Delta</span>
-                              </div>
-                            </div>
-
-                            <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-850/50 text-[11px] font-mono text-slate-400 leading-normal">
-                              {examReport.growth_metrics.analytical_insight}
-                            </div>
-                          </div>
-
-                          <button 
-                            onClick={clearSessions} 
-                            className="w-full py-2.5 bg-slate-900 hover:bg-slate-850 text-xs font-bold uppercase rounded-xl border border-slate-800 transition-all flex items-center justify-center gap-1.5 text-slate-300"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                            Restart Evaluation
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-xs py-10">
-                      <Bookmark className="w-8 h-8 mb-2 opacity-30" />
-                      No final exam questions compiled for this curriculum tier.
-                    </div>
-                  )}
-                </div>
-              )}
-              
-            </div>
-          )}
-
-        </div>
-
-        {/* RIGHT METRIC & GRAPH TELEMETRY COLUMN */}
-        <div className="lg:col-span-3 space-y-6">
-
-          {/* BOUNDED RAG CONTEXT TERMINAL */}
-          <div className="glass-panel rounded-2xl p-4 shadow-xl border border-slate-900 flex flex-col min-h-[160px]">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-purple-400 mb-2 flex items-center gap-1.5">
-              <Database className="w-4 h-4" /> 
-              RAG Vector Chunks
-            </h2>
-            <div className="bg-slate-950 border border-slate-900 rounded-xl p-3 font-mono text-[10px] text-purple-300 flex-1 overflow-y-auto custom-scrollbar space-y-2 max-h-[160px]">
-              {(!telemetry.retrievedContext || telemetry.retrievedContext.length === 0) ? (
-                <span className="text-slate-600 italic block text-center py-4">No active context loaded from ChromaDB.</span>
-              ) : (
-                telemetry.retrievedContext.map((text, idx) => (
-                  <p key={idx} className="bg-purple-950/10 border border-purple-900/10 p-2 rounded leading-normal">
-                    {text}
-                  </p>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* EXAM SCORE LEDGER CARD */}
-          <div className="glass-panel rounded-2xl p-4 shadow-xl border border-slate-900 flex flex-col">
-            <div className="flex justify-between items-center border-b border-slate-900 pb-2.5 mb-2.5">
-              <h3 className="text-[10px] uppercase font-mono tracking-widest text-slate-500">Live Exam Scoreboard</h3>
-              
-              {/* ON-DEMAND HINT LAUNCHER BUTTON */}
-              {activeView === 'final_exam' && (
-                <button 
-                  onClick={() => setShowSideHintBox(!showSideHintBox)} 
-                  disabled={!serverEvaluatedHint} 
-                  className={`text-[9px] font-bold px-2 py-1 rounded transition-all border ${
-                    serverEvaluatedHint 
-                      ? 'bg-amber-600/10 hover:bg-amber-600/20 border-amber-500/30 text-amber-400' 
-                      : 'bg-slate-950 border-slate-900 text-slate-700 cursor-not-allowed'
-                  }`}
-                >
-                  Core Hint
-                </button>
-              )}
-            </div>
-
-            {/* EXPANDABLE POPUP SLIDE FOR HINT */}
-            {showSideHintBox && serverEvaluatedHint && (
-              <div className="mb-3 bg-amber-950/20 border border-amber-500/20 p-3 rounded-xl text-xs space-y-2 glow-amber animate-fadeIn">
-                {/* Mamdani System Header */}
-                <div className="flex items-center gap-2 border-b border-amber-900/30 pb-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
-                  <span className="text-[8px] font-mono tracking-widest text-amber-400 font-bold uppercase">
-                    Mamdani Fuzzy System Output
-                  </span>
-                </div>
-                {/* Tier Badge + Remark Row */}
-                {mamdaniTier && (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
-                        mamdaniTier === 'High Mastery'      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                        mamdaniTier === 'Moderate Mastery'  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-                        mamdaniTier === 'Developing'        ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
-                                                             'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                      }`}>{mamdaniTier}</span>
-                      <span className="text-[9px] text-amber-600 font-mono">
-                        Failure: {currentDegreeOfFailure}%
-                      </span>
-                    </div>
-                    {mamdaniRemark && (
-                      <p className="text-[9px] text-slate-500 italic leading-snug">{mamdaniRemark}</p>
-                    )}
-                    {mamdaniGapAnalysis && (
-                      <p className="text-[9px] text-amber-400/80 font-mono bg-amber-950/40 p-2 rounded border border-amber-900/30">{mamdaniGapAnalysis}</p>
-                    )}
-                  </div>
                 )}
-                {/* Gemini-Generated Hint Body */}
-                <div className="border-t border-amber-900/20 pt-2">
-                  <div className="text-[8px] font-mono tracking-wider text-amber-500 font-bold uppercase mb-1">
-                    {currentDegreeOfFailure >= 60 ? 'Conceptual Walkthrough' : 'Socratic Nudge'}
-                  </div>
-                  <HintMarkdown text={serverEvaluatedHint} className="text-slate-300 font-normal text-[11px]" />
-                </div>
+              </div>
+            ) : (
+              <div className="glass-panel p-16 text-center rounded-3xl border border-slate-800 text-slate-500 text-xs">
+                No final exam questions available for this course.
               </div>
             )}
+          </div>
+        )}
 
-            {/* LEDGER GRID */}
-            <div className="bg-slate-950 border border-slate-900 rounded-xl p-2 overflow-y-auto space-y-1.5 font-mono text-[10px] custom-scrollbar max-h-[140px]">
-              {finalExams.length > 0 ? (
-                finalExams.map((q, i) => {
-                  const record = questionScoreRegistry[q.qId];
-                  return (
-                    <div key={q.qId} className="flex justify-between items-center bg-slate-900/30 p-2 rounded border border-slate-900">
-                      <span className="text-slate-500 font-bold">Q{i + 1} State:</span>
-                      {record ? (
-                        <span className={`font-black ${record.correct ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {Math.round(record.score)} pts ({record.attempts}a / {record.latency}s)
-                        </span>
-                      ) : (
-                        <span className="text-slate-700 italic">Pending</span>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <span className="text-slate-700 italic block text-center py-4">Syllabus unselected.</span>
-              )}
+        {/* PAGE 5: GLASS-BOX TELEMETRY & DIAGNOSTICS */}
+        {activeView === 'telemetry' && (
+          <div className="space-y-6 max-w-5xl mx-auto animate-fadeIn">
+            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
+              <div className="flex items-center gap-2.5 pb-4 border-b border-slate-800">
+                <div className="p-2 bg-purple-500/20 rounded-xl text-purple-400 border border-purple-500/30">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Glass-Box Cognitive Telemetry</h3>
+                  <span className="text-[11px] text-slate-400 font-mono">Live state machine & Mamdani fuzzy evaluation parameters</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Active Routing Node */}
+                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-900 space-y-3">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">LangGraph Active State</span>
+                  <div className="flex items-center gap-2 text-sm font-bold text-purple-300">
+                    <BrainCircuit className="w-4 h-4 text-purple-400" />
+                    <span>{telemetry.activeNode || 'Idle'}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    Remedial Routing Active: <span className={telemetry.remedialPathActive ? 'text-amber-400' : 'text-emerald-400'}>{String(telemetry.remedialPathActive)}</span>
+                  </div>
+                </div>
+
+                {/* Mamdani Fuzzy System Output */}
+                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-900 space-y-3">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Fuzzy Logic Evaluation</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Mastery Tier:</span>
+                    <span className="text-xs font-mono text-emerald-400 font-bold">{mamdaniTier || 'Not Evaluated'}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    Degree of Failure: <span className="text-amber-400 font-bold">{currentDegreeOfFailure}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Retrieved Context Chunks */}
+              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-900 space-y-3">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">ChromaDB Verified Grounding Chunks</span>
+                {telemetry.retrievedContext && telemetry.retrievedContext.length > 0 ? (
+                  <div className="space-y-2">
+                    {telemetry.retrievedContext.map((doc, idx) => (
+                      <div key={idx} className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 text-xs text-slate-300 font-mono leading-relaxed">
+                        {doc}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600 font-mono italic">No active RAG chunks retrieved for current query turn.</p>
+                )}
+              </div>
             </div>
           </div>
+        )}
 
-        </div>
+      </main>
 
-      </div>
+      {/* MATERIAL INGESTION MODAL */}
+      <MaterialIngestionModal
+        isOpen={isIngestionModalOpen}
+        onClose={() => setIsIngestionModalOpen(false)}
+        onIngestionSuccess={handleIngestionComplete}
+      />
     </div>
   );
 }
